@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BizExpense Tracker</title>
+  <script src="https://tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 font-sans">
+
+  <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6 mt-4">
+    <h1 class="text-2xl font-bold text-gray-800 text-center mb-6">Log Business Expense</h1>
+    
+    <!-- Toggle Tabs -->
+    <div class="flex mb-6 bg-gray-200 rounded-lg p-1">
+      <button id="tabReceipt" type="button" onclick="switchForm('receipt')" class="w-1/2 py-2 text-sm font-medium rounded-md bg-white text-gray-800 shadow">Receipt</button>
+      <button id="tabMileage" type="button" onclick="switchForm('mileage')" class="w-1/2 py-2 text-sm font-medium rounded-md text-gray-600">Mileage</button>
+    </div>
+
+    <!-- RECEIPT EXPENSE FORM -->
+    <form id="receiptForm" class="space-y-4" onsubmit="handleFormSubmit(event, 'receipt')">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Amount ($)</label>
+        <input type="number" id="receiptAmount" step="0.01" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500 text-lg">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Category</label>
+        <select id="receiptCategory" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border bg-white">
+          <option>Office Supplies</option>
+          <option>Meals & Entertainment</option>
+          <option>Software/Subscriptions</option>
+          <option>Marketing/Ads</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Vendor / Notes</label>
+        <input type="text" id="receiptNotes" placeholder="e.g., Best Buy - HDMI cables" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+      </div>
+      <button id="btnReceipt" type="submit" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-indigo-700 active:scale-[0.98] transition">Log Receipt</button>
+    </form>
+
+    <!-- MILEAGE EXPENSE FORM -->
+    <form id="mileageForm" style="display: none;" class="space-y-4" onsubmit="handleFormSubmit(event, 'mileage')">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Start Odometer</label>
+          <input type="number" id="startOdo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">End Odometer</label>
+          <input type="number" id="endOdo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Purpose of Trip</label>
+        <input type="text" id="mileageNotes" placeholder="e.g., Client meeting in Boston" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+      </div>
+      <button id="btnMileage" type="submit" class="w-full bg-emerald-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-emerald-700 active:scale-[0.98] transition">Log Mileage</button>
+    </form>
+  </div>
+
+  <script>
+    function switchForm(type) {
+      const receiptForm = document.getElementById('receiptForm');
+      const mileageForm = document.getElementById('mileageForm');
+      const tabReceipt = document.getElementById('tabReceipt');
+      const tabMileage = document.getElementById('tabMileage');
+
+      const activeStyle = "w-1/2 py-2 text-sm font-medium rounded-md bg-white text-gray-800 shadow";
+      const inactiveStyle = "w-1/2 py-2 text-sm font-medium rounded-md text-gray-600";
+
+      if (type === 'receipt') {
+        receiptForm.style.display = 'block';
+        mileageForm.style.display = 'none';
+        tabReceipt.className = activeStyle;
+        tabMileage.className = inactiveStyle;
+      } else {
+        receiptForm.style.display = 'none';
+        mileageForm.style.display = 'block';
+        tabReceipt.className = inactiveStyle;
+        tabMileage.className = activeStyle;
+      }
+    }
+
+    async function handleFormSubmit(event, type) {
+      event.preventDefault();
+      
+      // Select the active submit button to show loading status
+      const btn = type === 'receipt' ? document.getElementById('btnReceipt') : document.getElementById('btnMileage');
+      const originalText = btn.innerText;
+      btn.innerText = "Saving to Sheet...";
+      btn.disabled = true;
+
+      // Base layout matching your Google Sheets headers exactly
+      let payload = {
+        date: new Date().toLocaleDateString(),
+        type: type,
+        amount: "",
+        category: "",
+        miles: "",
+        notes: ""
+      };
+      
+      if (type === 'receipt') {
+        payload.amount = document.getElementById('receiptAmount').value;
+        payload.category = document.getElementById('receiptCategory').value;
+        payload.notes = document.getElementById('receiptNotes').value;
+      } else {
+        const start = parseFloat(document.getElementById('startOdo').value);
+        const end = parseFloat(document.getElementById('endOdo').value);
+        payload.miles = end - start;
+        payload.notes = document.getElementById('mileageNotes').value;
+        payload.category = "Mileage";
+      }
+
+            try {
+        // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+        const API_URL = "https://script.google.com/macros/s/AKfycbxmYPgyb3rN5sMWL7_PFSoKZRDz4QIk8zchVkCsGz-_BRcE2ZbcsgVpMS21E5DEBKQ/exec";
+        alert('logged');
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          mode: 'no-cors', // Crucial: Prevents browser security errors with Google Scripts
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8'
+          },
+          body: JSON.stringify(payload) // Directly sends the payload
+        });
+        alert('logged');
+        // Note: With 'no-cors', response.ok will always return false even on success.
+        // We will assume success if no network crash occurred.
+        alert(`Logged a ${type} entry successfully to Google Sheets!`);
+        //event.target.reset();
+
+      } catch (error) {
+        console.error("Error connecting to database:", error);
+        alert("Network error: Could not save data to spreadsheet.");
+      } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
+      }
+    }
+
+  </script>
+</body>
+</html>
