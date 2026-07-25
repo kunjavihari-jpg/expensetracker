@@ -116,7 +116,6 @@
             try {
         // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
         const API_URL = "https://script.google.com/macros/s/AKfycbxmYPgyb3rN5sMWL7_PFSoKZRDz4QIk8zchVkCsGz-_BRcE2ZbcsgVpMS21E5DEBKQ/exec";
-        alert('logged');
         const response = await fetch(API_URL, {
           method: 'POST',
           mode: 'no-cors', // Crucial: Prevents browser security errors with Google Scripts
@@ -125,7 +124,6 @@
           },
           body: JSON.stringify(payload) // Directly sends the payload
         });
-        alert('logged');
         // Note: With 'no-cors', response.ok will always return false even on success.
         // We will assume success if no network crash occurred.
         alert(`Logged a ${type} entry successfully to Google Sheets!`);
