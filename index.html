@@ -8,8 +8,62 @@
 </head>
 <body class="bg-gray-100 min-h-screen p-4 font-sans">
 
-  <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6 mt-4">
-    <h1 class="text-2xl font-bold text-gray-800 text-center mb-6">Log Business Expense</h1>
+  <!-- LOGIN / AUTH CARD -->
+  <div id="authContainer" class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6 mt-10">
+    <h1 class="text-2xl font-bold text-gray-800 text-center mb-2">BizExpense Tracker</h1>
+    <p class="text-sm text-gray-500 text-center mb-6">Sign in to manage your expenses</p>
+
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Email</label>
+        <input type="email" id="authEmail" placeholder="you@example.com" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Password</label>
+        <input type="password" id="authPassword" placeholder="••••••••" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500">
+      </div>
+
+      <div id="authError" class="text-sm text-red-600 hidden"></div>
+
+      <button id="btnLogin" type="button" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-indigo-700 active:scale-[0.98] transition">Log In</button>
+      <button id="btnSignup" type="button" class="w-full bg-gray-100 text-gray-700 font-semibold py-3 rounded-lg shadow hover:bg-gray-200 active:scale-[0.98] transition">Sign Up</button>
+      
+      <!-- DIVIDER -->
+      <div class="relative my-4">
+        <div class="absolute inset-0 flex items-center">
+          <div class="w-full border-t border-gray-300"></div>
+        </div>
+        <div class="relative flex justify-center text-xs uppercase">
+          <span class="bg-white px-2 text-gray-500">Or continue with</span>
+        </div>
+      </div>
+
+      <!-- GOOGLE SIGN-IN BUTTON -->
+      <button id="btnGoogle" type="button" class="w-full bg-white text-gray-700 font-semibold py-3 rounded-lg border border-gray-300 shadow-sm hover:bg-gray-50 active:scale-[0.98] transition flex items-center justify-center space-x-2">
+        <svg class="w-5 h-5" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <span>Sign in with Google</span>
+      </button>
+
+    </div>
+  </div>
+
+  <!-- MAIN APP CARD (Hidden by default until logged in) -->
+  <div id="appContainer" class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6 mt-4 hidden">
+    
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold text-gray-800">Log Business Expense</h1>
+      <button id="btnLogout" type="button" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 py-1.5 px-3 rounded-md font-medium transition">Log Out</button>
+    </div>
+
+    <!-- User Identity Indicator -->
+    <div class="text-xs text-gray-500 mb-4 truncate">
+      Logged in as: <span id="userEmailDisplay" class="font-semibold text-gray-700"></span>
+    </div>
     
     <!-- Toggle Tabs -->
     <div class="flex mb-6 bg-gray-200 rounded-lg p-1">
@@ -40,7 +94,7 @@
     </form>
 
     <!-- MILEAGE EXPENSE FORM -->
-    <form id="mileageForm" style="display: none;" class="space-y-4" onsubmit="handleFormSubmit(event, 'mileage')">
+    <form id="mileageForm" class="space-y-4 hidden" onsubmit="handleFormSubmit(event, 'mileage')">
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-700">Start Odometer</label>
@@ -59,9 +113,130 @@
     </form>
   </div>
 
-  <footer class="version-footer">
-    <p>v1.0.0</p>
+  <footer class="text-center text-xs text-gray-400 mt-6">
+    <p>v1.1.0</p>
   </footer>
+
+<!-- Firebase Auth Modular Scripts -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { 
+    getAuth, 
+    signInWithEmailAndPassword, 
+    createUserWithEmailAndPassword,
+    GoogleAuthProvider,
+    signInWithPopup,
+    signOut, 
+    onAuthStateChanged 
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCxo6I0UZj-_FuqCiDfSzgieWQf6iQKfBA",
+    authDomain: "businessexpense.firebaseapp.com",
+    projectId: "businessexpense",
+    storageBucket: "businessexpense.firebasestorage.app",
+    messagingSenderId: "29454321253",
+    appId: "1:29454321253:web:969f4a4ef4e350daf1a88c",
+    measurementId: "G-98G35BTD8D"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const googleProvider = new GoogleAuthProvider();
+
+  // Global state for logged in user
+  window.currentUser = null;
+
+  // DOM Elements
+  const authContainer = document.getElementById('authContainer');
+  const appContainer = document.getElementById('appContainer');
+  const authEmail = document.getElementById('authEmail');
+  const authPassword = document.getElementById('authPassword');
+  const authError = document.getElementById('authError');
+  const userEmailDisplay = document.getElementById('userEmailDisplay');
+
+  // Authentication Listener
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      window.currentUser = user;
+      userEmailDisplay.innerText = user.email;
+      authContainer.classList.add('hidden');
+      appContainer.classList.remove('hidden');
+    } else {
+      window.currentUser = null;
+      authContainer.classList.remove('hidden');
+      appContainer.classList.add('hidden');
+    }
+  });
+
+  // Helper for displaying errors
+  function showError(msg) {
+    authError.innerText = msg;
+    authError.classList.remove('hidden');
+  }
+
+  // Input Validation Helper
+  function validateInputs(email, password) {
+    if (!email || !email.trim()) {
+      showError("Please enter your email address.");
+      return false;
+    }
+    if (!password || !password.trim()) {
+      showError("Please enter your password.");
+      return false;
+    }
+    if (password.length < 6) {
+      showError("Password should be at least 6 characters.");
+      return false;
+    }
+    return true;
+  }
+
+  // Sign In Action (Email)
+  document.getElementById('btnLogin').addEventListener('click', async () => {
+    authError.classList.add('hidden');
+    const email = authEmail.value;
+    const password = authPassword.value;
+
+    if (!validateInputs(email, password)) return;
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  // Sign Up Action (Email)
+  document.getElementById('btnSignup').addEventListener('click', async () => {
+    authError.classList.add('hidden');
+    const email = authEmail.value;
+    const password = authPassword.value;
+
+    if (!validateInputs(email, password)) return;
+
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  // Google Sign In Action
+  document.getElementById('btnGoogle').addEventListener('click', async () => {
+    authError.classList.add('hidden');
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  // Sign Out Action
+  document.getElementById('btnLogout').addEventListener('click', () => signOut(auth));
+</script>
+
+  <!-- Form Logic -->
   <script>
     function switchForm(type) {
       const receiptForm = document.getElementById('receiptForm');
@@ -73,13 +248,13 @@
       const inactiveStyle = "w-1/2 py-2 text-sm font-medium rounded-md text-gray-600";
 
       if (type === 'receipt') {
-        receiptForm.style.display = 'block';
-        mileageForm.style.display = 'none';
+        receiptForm.classList.remove('hidden');
+        mileageForm.classList.add('hidden');
         tabReceipt.className = activeStyle;
         tabMileage.className = inactiveStyle;
       } else {
-        receiptForm.style.display = 'none';
-        mileageForm.style.display = 'block';
+        receiptForm.classList.add('hidden');
+        mileageForm.classList.remove('hidden');
         tabReceipt.className = inactiveStyle;
         tabMileage.className = activeStyle;
       }
@@ -87,16 +262,20 @@
 
     async function handleFormSubmit(event, type) {
       event.preventDefault();
-      
-      // Select the active submit button to show loading status
+
       const btn = type === 'receipt' ? document.getElementById('btnReceipt') : document.getElementById('btnMileage');
       const originalText = btn.innerText;
       btn.innerText = "Saving to Sheet...";
       btn.disabled = true;
 
-      // Base layout matching your Google Sheets headers exactly
+      // Extract user email cleanly
+      const userEmail = window.currentUser && window.currentUser.email ? window.currentUser.email : "Anonymous";
+      const userId = window.currentUser && window.currentUser.uid ? window.currentUser.uid : "";
+
       let payload = {
         date: new Date().toLocaleDateString(),
+        userEmail: userEmail,
+        userId: userId,
         type: type,
         amount: "",
         category: "",
@@ -116,21 +295,20 @@
         payload.category = "Mileage";
       }
 
-            try {
-        // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+      try {
         const API_URL = "https://script.google.com/macros/s/AKfycbxmYPgyb3rN5sMWL7_PFSoKZRDz4QIk8zchVkCsGz-_BRcE2ZbcsgVpMS21E5DEBKQ/exec";
-        const response = await fetch(API_URL, {
+
+        await fetch(API_URL, {
           method: 'POST',
-          mode: 'no-cors', // Crucial: Prevents browser security errors with Google Scripts
+          mode: 'no-cors',
           headers: {
             'Content-Type': 'text/plain;charset=utf-8'
           },
-          body: JSON.stringify(payload) // Directly sends the payload
+          body: JSON.stringify(payload)
         });
-        // Note: With 'no-cors', response.ok will always return false even on success.
-        // We will assume success if no network crash occurred.
+
         alert(`Logged a ${type} entry successfully to Google Sheets!`);
-        //event.target.reset();
+        event.target.reset();
 
       } catch (error) {
         console.error("Error connecting to database:", error);
@@ -140,7 +318,7 @@
         btn.disabled = false;
       }
     }
-
   </script>
+
 </body>
 </html>
