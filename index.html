@@ -3,322 +3,294 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BizExpense Tracker</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Town Alert Agent Simulator (Gemini API)</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0; padding: 0; background-color: #f4f6f8; color: #333;
+    }
+    #town-banner {
+      display: none; padding: 12px 20px; color: #fff; font-weight: 600; text-align: center;
+    }
+    #town-banner.Info { background-color: #0284c7; }
+    #town-banner.Advisory { background-color: #d97706; }
+    #town-banner.Emergency { background-color: #dc2626; }
+
+    .container {
+      max-width: 800px; margin: 40px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
+    input[type="text"], input[type="password"], textarea {
+      width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 0.95rem;
+    }
+    button {
+      background-color: #2563eb; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: 600;
+    }
+    button:disabled { background-color: #94a3b8; cursor: not-allowed; }
+    
+    .draft-container {
+      display: none; margin-top: 30px; background-color: #f8fafc; border: 2px dashed #94a3b8; border-radius: 8px; padding: 20px;
+    }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; color: white; font-size: 0.8rem; font-weight: bold; margin-bottom: 10px; }
+    .badge.Info { background-color: #0284c7; }
+    .badge.Advisory { background-color: #d97706; }
+    .badge.Emergency { background-color: #dc2626; }
+
+    .action-btn-group { margin-top: 15px; display: flex; gap: 10px; }
+    .approve-btn { background-color: #16a34a; }
+    .discard-btn { background-color: #64748b; }
+
+    .resident-alert-preview {
+      display: none; margin-top: 20px; padding: 15px; background: #eff6ff; border-left: 4px solid #2563eb; border-radius: 4px;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-4 font-sans">
+<body>
 
-  <!-- LOGIN / AUTH CARD -->
-  <div id="authContainer" class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6 mt-10">
-    <h1 class="text-2xl font-bold text-gray-800 text-center mb-2">BizExpense Tracker</h1>
-    <p class="text-sm text-gray-500 text-center mb-6">Sign in to manage your expenses</p>
+  <!-- SIMULATED TOWN WEBSITE BANNER -->
+  <div id="town-banner" class="Info">
+    <span id="banner-text-content"></span>
+  </div>
 
-    <div class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Email</label>
-        <input type="email" id="authEmail" placeholder="you@example.com" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500">
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Password</label>
-        <input type="password" id="authPassword" placeholder="••••••••" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500">
-      </div>
+  <div class="container">
+    <h2>Town Alert Agent Simulator (Gemini API)</h2>
+    <p style="font-size: 0.9rem; color: #64748b;">Simulates taking raw staff notes and formatting structured public updates using Gemini.</p>
+    
+    <div class="form-group">
+      <label for="apiKey">Gemini API Key (From Google AI Studio):</label>
+      <input type="password" id="apiKey" placeholder="AIzaSy..." />
+    </div>
 
-      <div id="authError" class="text-sm text-red-600 hidden"></div>
+    <div class="form-group">
+      <label for="rawInput">Raw Department Note:</label>
+      <textarea id="rawInput" rows="3" placeholder="e.g., Water main break on Pleasant St near high school. Shutting off water now. Low pressure expected until 8pm."></textarea>
+    </div>
 
-      <button id="btnLogin" type="button" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-indigo-700 active:scale-[0.98] transition">Log In</button>
-      <button id="btnSignup" type="button" class="w-full bg-gray-100 text-gray-700 font-semibold py-3 rounded-lg shadow hover:bg-gray-200 active:scale-[0.98] transition">Sign Up</button>
+    <button id="genBtn" onclick="generateAlert()">Generate Draft Alert</button>
+
+    <!-- STATUS/ERROR DISPLAY BOX -->
+    <div id="apiStatus" style="display:none; margin-top:15px; padding:10px; border-radius:6px; font-weight:500;"></div>
+
+    <!-- STEP 1: HUMAN APPROVAL PANEL -->
+    <div id="draftContainer" class="draft-container">
+      <h3>Review Draft (Human-in-the-Loop)</h3>
+      <span id="urgencyBadge" class="badge"></span>
       
-      <!-- DIVIDER -->
-      <div class="relative my-4">
-        <div class="absolute inset-0 flex items-center">
-          <div class="w-full border-t border-gray-300"></div>
-        </div>
-        <div class="relative flex justify-center text-xs uppercase">
-          <span class="bg-white px-2 text-gray-500">Or continue with</span>
-        </div>
+      <div class="form-group">
+        <label>Website Banner Text (Max 100 chars):</label>
+        <input type="text" id="draftBanner" />
       </div>
 
-      <!-- GOOGLE SIGN-IN BUTTON -->
-      <button id="btnGoogle" type="button" class="w-full bg-white text-gray-700 font-semibold py-3 rounded-lg border border-gray-300 shadow-sm hover:bg-gray-50 active:scale-[0.98] transition flex items-center justify-center space-x-2">
-        <svg class="w-5 h-5" viewBox="0 0 24 24">
-          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-        </svg>
-        <span>Sign in with Google</span>
-      </button>
+      <div class="form-group">
+        <label>Resident Alert Subject Line:</label>
+        <input type="text" id="draftSubject" />
+      </div>
 
+      <div class="form-group">
+        <label>Resident Alert Body Text:</label>
+        <textarea id="draftBody" rows="4"></textarea>
+      </div>
+
+      <div class="action-btn-group">
+        <button class="approve-btn" onclick="publishAlert()">Approve & Publish to Town Site</button>
+        <button class="discard-btn" onclick="discardDraft()">Discard Draft</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: SIMULATED LIVE RESIDENT ALERT POST -->
+    <div id="residentAlertPreview" class="resident-alert-preview">
+      <h4 id="liveSubject" style="margin-top:0; color: #1e3a8a;"></h4>
+      <p id="liveBody" style="margin-bottom:0; font-size: 0.95rem;"></p>
     </div>
   </div>
 
-  <!-- MAIN APP CARD (Hidden by default until logged in) -->
-  <div id="appContainer" class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6 mt-4 hidden">
-    
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold text-gray-800">Log Business Expense</h1>
-      <button id="btnLogout" type="button" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 py-1.5 px-3 rounded-md font-medium transition">Log Out</button>
-    </div>
-
-    <!-- User Identity Indicator -->
-    <div class="text-xs text-gray-500 mb-4 truncate">
-      Logged in as: <span id="userEmailDisplay" class="font-semibold text-gray-700"></span>
-    </div>
-    
-    <!-- Toggle Tabs -->
-    <div class="flex mb-6 bg-gray-200 rounded-lg p-1">
-      <button id="tabReceipt" type="button" onclick="switchForm('receipt')" class="w-1/2 py-2 text-sm font-medium rounded-md bg-white text-gray-800 shadow">Receipt</button>
-      <button id="tabMileage" type="button" onclick="switchForm('mileage')" class="w-1/2 py-2 text-sm font-medium rounded-md text-gray-600">Mileage</button>
-    </div>
-
-    <!-- RECEIPT EXPENSE FORM -->
-    <form id="receiptForm" class="space-y-4" onsubmit="handleFormSubmit(event, 'receipt')">
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Amount ($)</label>
-        <input type="number" id="receiptAmount" step="0.01" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500 text-lg">
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Category</label>
-        <select id="receiptCategory" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border bg-white">
-          <option>Office Supplies</option>
-          <option>Meals & Entertainment</option>
-          <option>Software/Subscriptions</option>
-          <option>Marketing/Ads</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Vendor / Notes</label>
-        <input type="text" id="receiptNotes" placeholder="e.g., Best Buy - HDMI cables" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
-      </div>
-      <button id="btnReceipt" type="submit" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-indigo-700 active:scale-[0.98] transition">Log Receipt</button>
-    </form>
-
-    <!-- MILEAGE EXPENSE FORM -->
-    <form id="mileageForm" class="space-y-4 hidden" onsubmit="handleFormSubmit(event, 'mileage')">
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Start Odometer</label>
-          <input type="number" id="startOdo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700">End Odometer</label>
-          <input type="number" id="endOdo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
-        </div>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Purpose of Trip</label>
-        <input type="text" id="mileageNotes" placeholder="e.g., Client meeting in Boston" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
-      </div>
-      <button id="btnMileage" type="submit" class="w-full bg-emerald-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-emerald-700 active:scale-[0.98] transition">Log Mileage</button>
-    </form>
-  </div>
-
-  <footer class="text-center text-xs text-gray-400 mt-6">
-    <p>v1.1.0</p>
-  </footer>
-
-<!-- Firebase Auth Modular Scripts -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { 
-    getAuth, 
-    signInWithEmailAndPassword, 
-    createUserWithEmailAndPassword,
-    GoogleAuthProvider,
-    signInWithPopup,
-    signOut, 
-    onAuthStateChanged 
-  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyCxo6I0UZj-_FuqCiDfSzgieWQf6iQKfBA",
-    authDomain: "businessexpense.firebaseapp.com",
-    projectId: "businessexpense",
-    storageBucket: "businessexpense.firebasestorage.app",
-    messagingSenderId: "29454321253",
-    appId: "1:29454321253:web:969f4a4ef4e350daf1a88c",
-    measurementId: "G-98G35BTD8D"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const googleProvider = new GoogleAuthProvider();
-
-  // Global state for logged in user
-  window.currentUser = null;
-
-  // DOM Elements
-  const authContainer = document.getElementById('authContainer');
-  const appContainer = document.getElementById('appContainer');
-  const authEmail = document.getElementById('authEmail');
-  const authPassword = document.getElementById('authPassword');
-  const authError = document.getElementById('authError');
-  const userEmailDisplay = document.getElementById('userEmailDisplay');
-
-  // Authentication Listener
-  onAuthStateChanged(auth, (user) => {
-    if (user) {
-      window.currentUser = user;
-      userEmailDisplay.innerText = user.email;
-      authContainer.classList.add('hidden');
-      appContainer.classList.remove('hidden');
-    } else {
-      window.currentUser = null;
-      authContainer.classList.remove('hidden');
-      appContainer.classList.add('hidden');
-    }
-  });
-
-  // Helper for displaying errors
-  function showError(msg) {
-    authError.innerText = msg;
-    authError.classList.remove('hidden');
-  }
-
-  // Input Validation Helper
-  function validateInputs(email, password) {
-    if (!email || !email.trim()) {
-      showError("Please enter your email address.");
-      return false;
-    }
-    if (!password || !password.trim()) {
-      showError("Please enter your password.");
-      return false;
-    }
-    if (password.length < 6) {
-      showError("Password should be at least 6 characters.");
-      return false;
-    }
-    return true;
-  }
-
-  // Sign In Action (Email)
-  document.getElementById('btnLogin').addEventListener('click', async () => {
-    authError.classList.add('hidden');
-    const email = authEmail.value;
-    const password = authPassword.value;
-
-    if (!validateInputs(email, password)) return;
-
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err) {
-      showError(err.message);
-    }
-  });
-
-  // Sign Up Action (Email)
-  document.getElementById('btnSignup').addEventListener('click', async () => {
-    authError.classList.add('hidden');
-    const email = authEmail.value;
-    const password = authPassword.value;
-
-    if (!validateInputs(email, password)) return;
-
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-    } catch (err) {
-      showError(err.message);
-    }
-  });
-
-  // Google Sign In Action
-  document.getElementById('btnGoogle').addEventListener('click', async () => {
-    authError.classList.add('hidden');
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err) {
-      showError(err.message);
-    }
-  });
-
-  // Sign Out Action
-  document.getElementById('btnLogout').addEventListener('click', () => signOut(auth));
-</script>
-
-  <!-- Form Logic -->
   <script>
-    function switchForm(type) {
-      const receiptForm = document.getElementById('receiptForm');
-      const mileageForm = document.getElementById('mileageForm');
-      const tabReceipt = document.getElementById('tabReceipt');
-      const tabMileage = document.getElementById('tabMileage');
+    let currentUrgency = "Info";
 
-      const activeStyle = "w-1/2 py-2 text-sm font-medium rounded-md bg-white text-gray-800 shadow";
-      const inactiveStyle = "w-1/2 py-2 text-sm font-medium rounded-md text-gray-600";
+    // MUNICIPALITY CONTEXT DATA (OPTION A)
+    const MUNICIPALITY_CONTEXT = {
+      name: "Town of Hudson",
+      state: "MA",
+      department: "Department of Public Works",
+      emergencyContacts: {
+        dpw: "978-555-0100",
+        policeNonEmergency: "978-555-0111",
+        email: "alerts@hudsonma.gov"
+      },
+      styleGuide: {
+        tone: "Clear, authoritative, professional civic voice",
+        bannerMaxChars: 100
+      }
+    };
 
-      if (type === 'receipt') {
-        receiptForm.classList.remove('hidden');
-        mileageForm.classList.add('hidden');
-        tabReceipt.className = activeStyle;
-        tabMileage.className = inactiveStyle;
-      } else {
-        receiptForm.classList.add('hidden');
-        mileageForm.classList.remove('hidden');
-        tabReceipt.className = inactiveStyle;
-        tabMileage.className = activeStyle;
+    function logStatus(message, isError = false) {
+      const statusEl = document.getElementById('apiStatus');
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.backgroundColor = isError ? '#ffebe9' : '#e6f4ea';
+        statusEl.style.color = isError ? '#cf222e' : '#1a7f37';
+        statusEl.style.border = `1px solid ${isError ? '#ff8182' : '#4ac26b'}`;
+        statusEl.innerText = message;
       }
     }
 
-    async function handleFormSubmit(event, type) {
-      event.preventDefault();
+    async function generateAlert() {
+      const apiKeyEl = document.getElementById('apiKey');
+      const rawInputEl = document.getElementById('rawInput');
+      const genBtn = document.getElementById('genBtn');
 
-      const btn = type === 'receipt' ? document.getElementById('btnReceipt') : document.getElementById('btnMileage');
-      const originalText = btn.innerText;
-      btn.innerText = "Saving to Sheet...";
-      btn.disabled = true;
+      const apiKey = apiKeyEl ? apiKeyEl.value.trim() : "";
+      const rawInput = rawInputEl ? rawInputEl.value.trim() : "";
 
-      // Extract user email cleanly
-      const userEmail = window.currentUser && window.currentUser.email ? window.currentUser.email : "Anonymous";
-      const userId = window.currentUser && window.currentUser.uid ? window.currentUser.uid : "";
-
-      let payload = {
-        date: new Date().toLocaleDateString(),
-        userEmail: userEmail,
-        userId: userId,
-        type: type,
-        amount: "",
-        category: "",
-        miles: "",
-        notes: ""
-      };
-      
-      if (type === 'receipt') {
-        payload.amount = document.getElementById('receiptAmount').value;
-        payload.category = document.getElementById('receiptCategory').value;
-        payload.notes = document.getElementById('receiptNotes').value;
-      } else {
-        const start = parseFloat(document.getElementById('startOdo').value);
-        const end = parseFloat(document.getElementById('endOdo').value);
-        payload.miles = end - start;
-        payload.notes = document.getElementById('mileageNotes').value;
-        payload.category = "Mileage";
+      if (!apiKey || !rawInput) {
+        logStatus("Please enter both an API key and operational notes.", true);
+        return;
       }
+
+      if (genBtn) {
+        genBtn.innerText = "Processing Alert...";
+        genBtn.disabled = true;
+      }
+      logStatus("Selecting available Gemini model...");
+
+      let activeModel = "gemini-1.5-flash"; // Reliable default
 
       try {
-        const API_URL = "https://script.google.com/macros/s/AKfycbxmYPgyb3rN5sMWL7_PFSoKZRDz4QIk8zchVkCsGz-_BRcE2ZbcsgVpMS21E5DEBKQ/exec";
+        const modelCheck = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        const modelData = await modelCheck.json();
+        
+        if (modelData.models) {
+          const supported = modelData.models
+            .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
+            .map(m => m.name.replace("models/", ""));
 
-        await fetch(API_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'text/plain;charset=utf-8'
+          const candidates = ["gemini-1.5-flash-002", "gemini-1.5-flash", "gemini-3.5-flash"];
+          const matched = candidates.find(c => supported.includes(c));
+          if (matched) activeModel = matched;
+        }
+      } catch (e) {
+        console.warn("Could not auto-detect model, using default:", activeModel);
+      }
+
+      logStatus(`Connecting to Gemini API using ${activeModel}...`);
+
+      const endpoint = `https://generativelanguage.googleapis.com/v1/models/${activeModel}:generateContent?key=${apiKey}`;
+
+      // API PAYLOAD WITH SYSTEM INSTRUCTION (OPTION A)
+      const payload = {
+        systemInstruction: {
+          parts: [
+            {
+              text: `You are an official municipal alert agent for ${MUNICIPALITY_CONTEXT.name}, ${MUNICIPALITY_CONTEXT.state} (${MUNICIPALITY_CONTEXT.department}). 
+
+LOCAL CONTEXT & RULES:
+- Town: ${MUNICIPALITY_CONTEXT.name}, ${MUNICIPALITY_CONTEXT.state}
+- Official Contact Info: ${MUNICIPALITY_CONTEXT.emergencyContacts.dpw} | ${MUNICIPALITY_CONTEXT.emergencyContacts.email}
+- Tone: ${MUNICIPALITY_CONTEXT.styleGuide.tone}
+- Rules: Format internal operational notes into clear, actionable public alerts for residents. Ensure banner text remains under 100 characters. Include contact/escalation info in the resident alert body when appropriate.`
+            }
+          ]
+        },
+        contents: [
+          {
+            parts: [
+              {
+                text: `Process the following internal operational note into a public update matching the schema:\n\nNote: "${rawInput}"`
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              urgency_level: { type: "STRING", enum: ["Info", "Advisory", "Emergency"] },
+              banner_text: { type: "STRING" },
+              resident_alert_subject: { type: "STRING" },
+              resident_alert_body: { type: "STRING" }
+            },
+            required: ["urgency_level", "banner_text", "resident_alert_subject", "resident_alert_body"]
           },
+          temperature: 0.1
+        }
+      };
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
 
-        alert(`Logged a ${type} entry successfully to Google Sheets!`);
-        event.target.reset();
+        const data = await response.json();
 
-      } catch (error) {
-        console.error("Error connecting to database:", error);
-        alert("Network error: Could not save data to spreadsheet.");
+        if (!response.ok || data.error) {
+          const errMsg = data.error ? data.error.message : `HTTP Error ${response.status}`;
+          throw new Error(errMsg);
+        }
+
+        if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+          throw new Error("Received empty response structure from Gemini.");
+        }
+
+        const result = JSON.parse(data.candidates[0].content.parts[0].text);
+        currentUrgency = result.urgency_level || "Info";
+
+        const badge = document.getElementById('urgencyBadge');
+        if (badge) {
+          badge.innerText = currentUrgency.toUpperCase();
+          badge.className = "badge " + currentUrgency;
+        }
+
+        const bannerInput = document.getElementById('draftBanner');
+        if (bannerInput) bannerInput.value = result.banner_text || "";
+
+        const subjectInput = document.getElementById('draftSubject');
+        if (subjectInput) subjectInput.value = result.resident_alert_subject || "";
+
+        const bodyInput = document.getElementById('draftBody');
+        if (bodyInput) bodyInput.value = result.resident_alert_body || "";
+
+        const draftContainer = document.getElementById('draftContainer');
+        if (draftContainer) {
+          draftContainer.style.display = 'block';
+        }
+
+        logStatus("Draft generated successfully with Town context! Review below.");
+
+      } catch (err) {
+        logStatus(`API Error: ${err.message}`, true);
+        console.error("Full error:", err);
       } finally {
-        btn.innerText = originalText;
-        btn.disabled = false;
+        if (genBtn) {
+          genBtn.innerText = "Generate Draft Alert";
+          genBtn.disabled = false;
+        }
       }
     }
-  </script>
 
+    function publishAlert() {
+      const bannerText = document.getElementById('draftBanner').value;
+      const subject = document.getElementById('draftSubject').value;
+      const body = document.getElementById('draftBody').value;
+
+      const bannerEl = document.getElementById('town-banner');
+      document.getElementById('banner-text-content').innerText = bannerText;
+      bannerEl.className = currentUrgency;
+      bannerEl.style.display = 'block';
+
+      document.getElementById('liveSubject').innerText = subject;
+      document.getElementById('liveBody').innerText = body;
+      document.getElementById('residentAlertPreview').style.display = 'block';
+
+      document.getElementById('draftContainer').style.display = 'none';
+    }
+
+    function discardDraft() {
+      document.getElementById('draftContainer').style.display = 'none';
+    }
+  </script>
 </body>
 </html>
