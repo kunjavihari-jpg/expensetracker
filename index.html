@@ -52,7 +52,7 @@
     </div>
   </div>
 
-  <!-- MAIN APP CARD (Hidden by default until logged in) -->
+  <!-- MAIN APP CARD -->
   <div id="appContainer" class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6 mt-4 hidden">
     
     <div class="flex justify-between items-center mb-4">
@@ -65,7 +65,7 @@
       Logged in as: <span id="userEmailDisplay" class="font-semibold text-gray-700"></span>
     </div>
 
-    <!-- ADDED: ACTIVE GOOGLE SHEET DISPLAY BADGE -->
+    <!-- ACTIVE GOOGLE SHEET DISPLAY BADGE -->
     <div id="activeSheetBadge" class="mb-4 bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-xs flex items-center justify-between">
       <div class="truncate mr-2">
         <div class="text-indigo-900 font-semibold flex items-center gap-1">
@@ -93,405 +93,99 @@
           <label class="block text-xs font-medium text-gray-600">Sheet Tab Name (Optional)</label>
           <input type="text" id="customTabName" placeholder="Sheet1" value="Sheet1" class="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 text-xs border">
         </div>
-        <button id="btnSaveConfig" type="button" onclick="saveSheetSettings()" class="w-full bg-gray-800 text-white text-xs font-medium py-2 rounded hover:bg-gray-900 transition">Save Settings</button>
+        <button id="btnSaveConfig" type="button" class="w-full bg-gray-800 text-white text-xs font-medium py-2 rounded hover:bg-gray-900 transition">Save Settings</button>
       </div>
     </details>
     
-    <!-- Toggle Tabs -->
-    <div class="flex mb-6 bg-gray-200 rounded-lg p-1">
-      <button id="tabReceipt" type="button" onclick="switchForm('receipt')" class="w-1/2 py-2 text-sm font-medium rounded-md bg-white text-gray-800 shadow">Receipt</button>
-      <button id="tabMileage" type="button" onclick="switchForm('mileage')" class="w-1/2 py-2 text-sm font-medium rounded-md text-gray-600">Mileage</button>
+    <!-- TOP-LEVEL TAB SWITCHER (Log vs History) -->
+    <div class="flex mb-6 border-b border-gray-200">
+      <button id="navTabLog" type="button" class="w-1/2 py-2.5 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600">
+        📝 Log Entry
+      </button>
+      <button id="navTabHistory" type="button" class="w-1/2 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+        📋 History & Total
+      </button>
     </div>
 
-    <!-- RECEIPT EXPENSE FORM -->
-    <form id="receiptForm" class="space-y-4" onsubmit="handleFormSubmit(event, 'receipt')">
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Amount ($)</label>
-        <input type="number" id="receiptAmount" step="0.01" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500 text-lg">
+    <!-- SECTION 1: LOG EXPENSE VIEW -->
+    <div id="viewLogSection">
+      <!-- Toggle Forms (Receipt vs Mileage) -->
+      <div class="flex mb-5 bg-gray-100 rounded-lg p-1">
+        <button id="tabReceipt" type="button" class="w-1/2 py-1.5 text-xs font-medium rounded-md bg-white text-gray-800 shadow">Receipt</button>
+        <button id="tabMileage" type="button" class="w-1/2 py-1.5 text-xs font-medium rounded-md text-gray-600">Mileage</button>
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Category</label>
-        <select id="receiptCategory" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border bg-white">
-          <option>Office Supplies</option>
-          <option>Meals & Entertainment</option>
-          <option>Software/Subscriptions</option>
-          <option>Marketing/Ads</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Vendor / Notes</label>
-        <input type="text" id="receiptNotes" placeholder="e.g., Best Buy - HDMI cables" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Upload Receipt Image/PDF</label>
-        <input type="file" id="receiptFile" accept="image/*,application/pdf" class="mt-1 block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
-      </div>
-      <button id="btnReceipt" type="submit" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-indigo-700 active:scale-[0.98] transition">Log Receipt</button>
-    </form>
 
-    <!-- MILEAGE EXPENSE FORM -->
-    <form id="mileageForm" class="space-y-4 hidden" onsubmit="handleFormSubmit(event, 'mileage')">
-      <div class="grid grid-cols-2 gap-4">
+      <!-- RECEIPT EXPENSE FORM -->
+      <form id="receiptForm" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700">Start Odometer</label>
-          <input type="number" id="startOdo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+          <label class="block text-sm font-medium text-gray-700">Amount ($)</label>
+          <input type="number" id="receiptAmount" step="0.01" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500 text-lg">
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700">End Odometer</label>
-          <input type="number" id="endOdo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+          <label class="block text-sm font-medium text-gray-700">Category</label>
+          <select id="receiptCategory" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border bg-white">
+            <option>Office Supplies</option>
+            <option>Meals & Entertainment</option>
+            <option>Software/Subscriptions</option>
+            <option>Marketing/Ads</option>
+          </select>
         </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Vendor / Notes</label>
+          <input type="text" id="receiptNotes" placeholder="e.g., Best Buy - HDMI cables" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Upload Receipt Image/PDF</label>
+          <input type="file" id="receiptFile" accept="image/*,application/pdf" class="mt-1 block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+        </div>
+        <button id="btnReceipt" type="submit" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-indigo-700 active:scale-[0.98] transition">Log Receipt</button>
+      </form>
+
+      <!-- MILEAGE EXPENSE FORM -->
+      <form id="mileageForm" class="space-y-4 hidden">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Start Odometer</label>
+            <input type="number" id="startOdo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">End Odometer</label>
+            <input type="number" id="endOdo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Purpose of Trip</label>
+          <input type="text" id="mileageNotes" placeholder="e.g., Client meeting in Boston" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+        </div>
+        <button id="btnMileage" type="submit" class="w-full bg-emerald-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-emerald-700 active:scale-[0.98] transition">Log Mileage</button>
+      </form>
+    </div>
+
+    <!-- SECTION 2: HISTORY TAB VIEW -->
+    <div id="viewHistorySection" class="hidden space-y-4">
+      <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+        <div>
+          <div class="text-xs text-gray-500 uppercase font-bold tracking-wider">Sheet Summary Total</div>
+          <div id="sessionTotal" class="text-lg font-extrabold text-indigo-600">$0.00</div>
+        </div>
+        <button id="btnFetchExpenses" type="button" class="text-xs bg-white hover:bg-gray-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-lg font-medium transition shadow-sm flex items-center gap-1">
+          🔄 Refresh
+        </button>
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Purpose of Trip</label>
-        <input type="text" id="mileageNotes" placeholder="e.g., Client meeting in Boston" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+
+      <!-- Scrollable list container -->
+      <div id="expenseList" class="space-y-2 max-h-96 overflow-y-auto pr-1 pt-2">
+        <p id="emptyListMsg" class="text-xs text-gray-400 text-center py-6 italic">Switching to view history...</p>
       </div>
-      <button id="btnMileage" type="submit" class="w-full bg-emerald-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-emerald-700 active:scale-[0.98] transition">Log Mileage</button>
-    </form>
+    </div>
+
   </div>
 
   <footer class="text-center text-xs text-gray-400 mt-6">
-    <p>v2.0.0 (Direct Google REST API)</p>
+    <p>v2.2.0 (Tabbed View Edition)</p>
   </footer>
 
-<!-- Firebase Auth Modular Scripts -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { 
-    getAuth, 
-    signInWithEmailAndPassword, 
-    createUserWithEmailAndPassword,
-    GoogleAuthProvider,
-    signInWithPopup,
-    signOut, 
-    onAuthStateChanged 
-  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyCxo6I0UZj-_FuqCiDfSzgieWQf6iQKfBA",
-    authDomain: "businessexpense.firebaseapp.com",
-    projectId: "businessexpense",
-    storageBucket: "businessexpense.firebasestorage.app",
-    messagingSenderId: "29454321253",
-    appId: "1:29454321253:web:969f4a4ef4e350daf1a88c",
-    measurementId: "G-98G35BTD8D"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  
-  // Initialize Google Auth Provider & Add Google Sheets + Drive OAuth Scopes
-  const googleProvider = new GoogleAuthProvider();
-  googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
-  googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
-
-  // Global state for logged in user
-  window.currentUser = null;
-
-  // DOM Elements
-  const authContainer = document.getElementById('authContainer');
-  const appContainer = document.getElementById('appContainer');
-  const authEmail = document.getElementById('authEmail');
-  const authPassword = document.getElementById('authPassword');
-  const authError = document.getElementById('authError');
-  const userEmailDisplay = document.getElementById('userEmailDisplay');
-
-  // Authentication Listener
-  onAuthStateChanged(auth, (user) => {
-    if (user) {
-      window.currentUser = user;
-      userEmailDisplay.innerText = user.email;
-      authContainer.classList.add('hidden');
-      appContainer.classList.remove('hidden');
-      loadSheetSettings();
-    } else {
-      window.currentUser = null;
-      sessionStorage.removeItem('google_access_token');
-      authContainer.classList.remove('hidden');
-      appContainer.classList.add('hidden');
-    }
-  });
-
-  // Helper for displaying errors
-  function showError(msg) {
-    authError.innerText = msg;
-    authError.classList.remove('hidden');
-  }
-
-  // Input Validation Helper
-  function validateInputs(email, password) {
-    if (!email || !email.trim()) {
-      showError("Please enter your email address.");
-      return false;
-    }
-    if (!password || !password.trim()) {
-      showError("Please enter your password.");
-      return false;
-    }
-    if (password.length < 6) {
-      showError("Password should be at least 6 characters.");
-      return false;
-    }
-    return true;
-  }
-
-  // Sign In Action (Email)
-  document.getElementById('btnLogin').addEventListener('click', async () => {
-    authError.classList.add('hidden');
-    const email = authEmail.value;
-    const password = authPassword.value;
-
-    if (!validateInputs(email, password)) return;
-
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err) {
-      showError(err.message);
-    }
-  });
-
-  // Sign Up Action (Email)
-  document.getElementById('btnSignup').addEventListener('click', async () => {
-    authError.classList.add('hidden');
-    const email = authEmail.value;
-    const password = authPassword.value;
-
-    if (!validateInputs(email, password)) return;
-
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-    } catch (err) {
-      showError(err.message);
-    }
-  });
-
-  // Google Sign In Action (Captures OAuth Access Token)
-  document.getElementById('btnGoogle').addEventListener('click', async () => {
-    authError.classList.add('hidden');
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      
-      // Extract Google OAuth Access Token
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential && credential.accessToken) {
-        sessionStorage.setItem('google_access_token', credential.accessToken);
-      }
-    } catch (err) {
-      showError(err.message);
-    }
-  });
-
-  // Sign Out Action
-  document.getElementById('btnLogout').addEventListener('click', () => signOut(auth));
-</script>
-
-  <!-- Sheet Settings & REST API Form Logic -->
-  <script>
-    function updateSheetBadgeDisplay(sheetId, tabName) {
-      const displaySheetId = document.getElementById('displaySheetId');
-      const displayTabName = document.getElementById('displayTabName');
-      const btnOpenSheet = document.getElementById('btnOpenSheet');
-
-      if (sheetId) {
-        // Show truncated Sheet ID for readability
-        displaySheetId.innerText = sheetId.length > 15 ? `${sheetId.substring(0, 8)}...${sheetId.substring(sheetId.length - 4)}` : sheetId;
-        displayTabName.innerText = tabName || "Sheet1";
-        btnOpenSheet.href = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
-        btnOpenSheet.classList.remove('hidden');
-      } else {
-        displaySheetId.innerText = "Not set";
-        displayTabName.innerText = "None";
-        btnOpenSheet.classList.add('hidden');
-      }
-    }
-
-    function saveSheetSettings() {
-      const sheetId = document.getElementById('customSheetId').value.trim();
-      const tabName = document.getElementById('customTabName').value.trim() || "Sheet1";
-
-      if (!sheetId) {
-        alert("Please enter a Google Sheet ID.");
-        return;
-      }
-
-      localStorage.setItem('user_sheet_id', sheetId);
-      localStorage.setItem('user_tab_name', tabName);
-      
-      updateSheetBadgeDisplay(sheetId, tabName);
-      alert("Sheet Settings Saved!");
-    }
-
-    function loadSheetSettings() {
-      const savedSheetId = localStorage.getItem('user_sheet_id') || "";
-      const savedTabName = localStorage.getItem('user_tab_name') || "Sheet1";
-
-      document.getElementById('customSheetId').value = savedSheetId;
-      document.getElementById('customTabName').value = savedTabName;
-
-      updateSheetBadgeDisplay(savedSheetId, savedTabName);
-    }
-
-    function switchForm(type) {
-      const receiptForm = document.getElementById('receiptForm');
-      const mileageForm = document.getElementById('mileageForm');
-      const tabReceipt = document.getElementById('tabReceipt');
-      const tabMileage = document.getElementById('tabMileage');
-
-      const activeStyle = "w-1/2 py-2 text-sm font-medium rounded-md bg-white text-gray-800 shadow";
-      const inactiveStyle = "w-1/2 py-2 text-sm font-medium rounded-md text-gray-600";
-
-      if (type === 'receipt') {
-        receiptForm.classList.remove('hidden');
-        mileageForm.classList.add('hidden');
-        tabReceipt.className = activeStyle;
-        tabMileage.className = inactiveStyle;
-      } else {
-        receiptForm.classList.add('hidden');
-        mileageForm.classList.remove('hidden');
-        tabReceipt.className = inactiveStyle;
-        tabMileage.className = activeStyle;
-      }
-    }
-
-    // Upload file to Google Drive via v3 REST API
-    async function uploadFileToGoogleDrive(file, accessToken) {
-      const metadata = {
-        name: `Receipt_${Date.now()}_${file.name}`,
-        mimeType: file.type
-      };
-
-      const boundary = '-------314159265358979323846';
-      const delimiter = "\r\n--" + boundary + "\r\n";
-      const close_delim = "\r\n--" + boundary + "--";
-
-      const reader = new FileReader();
-
-      return new Promise((resolve, reject) => {
-        reader.onload = async function (e) {
-          const contentType = file.type || 'application/octet-stream';
-          const base64Data = e.target.result.split(',')[1];
-
-          const multipartRequestBody =
-            delimiter +
-            'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-            JSON.stringify(metadata) +
-            delimiter +
-            'Content-Type: ' + contentType + '\r\n' +
-            'Content-Transfer-Encoding: base64\r\n\r\n' +
-            base64Data +
-            close_delim;
-
-          try {
-            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': `multipart/related; boundary="${boundary}"`
-              },
-              body: multipartRequestBody
-            });
-
-            if (!response.ok) {
-              const errorJson = await response.json();
-              throw new Error(errorJson.error ? errorJson.error.message : 'Drive Upload Failed');
-            }
-
-            const data = await response.json();
-            resolve(data.webViewLink);
-          } catch (err) {
-            reject(err);
-          }
-        };
-
-        reader.onerror = (error) => reject(error);
-        reader.readAsDataURL(file);
-      });
-    }
-
-    async function handleFormSubmit(event, type) {
-      event.preventDefault();
-
-      const sheetId = localStorage.getItem('user_sheet_id') || document.getElementById('customSheetId').value.trim();
-      const tabName = localStorage.getItem('user_tab_name') || document.getElementById('customTabName').value.trim() || "Sheet1";
-      const accessToken = sessionStorage.getItem('google_access_token');
-
-      if (!sheetId) {
-        alert("Please specify a Google Sheet ID in settings first!");
-        return;
-      }
-
-      if (!accessToken) {
-        alert("To post directly to Google Sheets & Drive, you must sign in using the 'Sign in with Google' button.");
-        return;
-      }
-
-      const btn = type === 'receipt' ? document.getElementById('btnReceipt') : document.getElementById('btnMileage');
-      const originalText = btn.innerText;
-
-      const userEmail = window.currentUser && window.currentUser.email ? window.currentUser.email : "Anonymous";
-      const date = new Date().toLocaleDateString();
-
-      let rowData = [];
-
-      try {
-        if (type === 'receipt') {
-          const amount = document.getElementById('receiptAmount').value;
-          const category = document.getElementById('receiptCategory').value;
-          const notes = document.getElementById('receiptNotes').value;
-          const fileInput = document.getElementById('receiptFile');
-          let receiptLink = "";
-
-          if (fileInput && fileInput.files.length > 0) {
-            btn.innerText = "Uploading Receipt to Google Drive...";
-            btn.disabled = true;
-            const file = fileInput.files[0];
-            receiptLink = await uploadFileToGoogleDrive(file, accessToken);
-          }
-
-          btn.innerText = "Writing to Google Sheet...";
-          btn.disabled = true;
-
-          rowData = [date, userEmail, type, category, amount, "", notes, receiptLink];
-        } else {
-          btn.innerText = "Writing to Google Sheet...";
-          btn.disabled = true;
-
-          const start = parseFloat(document.getElementById('startOdo').value);
-          const end = parseFloat(document.getElementById('endOdo').value);
-          const miles = end - start;
-          const notes = document.getElementById('mileageNotes').value;
-          rowData = [date, userEmail, type, "Mileage", "", miles, notes, ""];
-        }
-
-        const endpoint = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A:H:append?valueInputOption=USER_ENTERED`;
-
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            values: [rowData]
-          })
-        });
-
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error ? errData.error.message : "Failed to write to sheet");
-        }
-
-        alert(`Logged a ${type} entry successfully to your Google Sheet!`);
-        event.target.reset();
-
-      } catch (error) {
-        console.error("REST API Error:", error);
-        alert(`Error: ${error.message}`);
-      } finally {
-        btn.innerText = originalText;
-        btn.disabled = false;
-      }
-    }
-  </script>
+  <script type="module" src="app.js"></script>
 
 </body>
 </html>
