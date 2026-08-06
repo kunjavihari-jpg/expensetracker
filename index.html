@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizExpense Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="data:,">
 </head>
 <body class="bg-gray-100 min-h-screen p-4 font-sans">
 
@@ -16,11 +17,11 @@
     <div class="space-y-4">
       <div>
         <label class="block text-sm font-medium text-gray-700">Email</label>
-        <input type="email" id="authEmail" placeholder="you@example.com" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500">
+        <input type="email" id="authEmail" placeholder="you@example.com" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500">
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700">Password</label>
-        <input type="password" id="authPassword" placeholder="••••••••" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500">
+        <input type="password" id="authPassword" placeholder="••••••••" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500">
       </div>
 
       <div id="authError" class="text-sm text-red-600 hidden"></div>
@@ -38,7 +39,6 @@
         </div>
       </div>
 
-      <!-- GOOGLE SIGN-IN BUTTON -->
       <button id="btnGoogle" type="button" class="w-full bg-white text-gray-700 font-semibold py-3 rounded-lg border border-gray-300 shadow-sm hover:bg-gray-50 active:scale-[0.98] transition flex items-center justify-center space-x-2">
         <svg class="w-5 h-5" viewBox="0 0 24 24">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -87,7 +87,6 @@
         <div>
           <label class="block text-xs font-medium text-gray-600">Google Sheet ID</label>
           <input type="text" id="customSheetId" placeholder="1BxiMVs0XRX5nF1..." class="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 text-xs border">
-          <p class="text-[10px] text-gray-400 mt-1">Found in your sheet URL: https://docs.google.com/spreadsheets/d/<b>[SHEET_ID]</b>/edit</p>
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600">Sheet Tab Name (Optional)</label>
@@ -109,6 +108,13 @@
 
     <!-- SECTION 1: LOG EXPENSE VIEW -->
     <div id="viewLogSection">
+      
+      <!-- Edit Mode Banner -->
+      <div id="editBanner" class="hidden mb-4 bg-amber-100 border border-amber-300 text-amber-800 px-3 py-2 rounded-lg text-xs font-semibold flex justify-between items-center shadow-sm">
+        <span>✏️ Currently Editing a Record</span>
+        <button id="btnCancelEdit" type="button" class="bg-amber-200 hover:bg-amber-300 text-amber-900 px-2 py-1 rounded transition">Cancel</button>
+      </div>
+
       <!-- Toggle Forms (Receipt vs Mileage) -->
       <div class="flex mb-5 bg-gray-100 rounded-lg p-1">
         <button id="tabReceipt" type="button" class="w-1/2 py-1.5 text-xs font-medium rounded-md bg-white text-gray-800 shadow">Receipt</button>
@@ -117,9 +123,11 @@
 
       <!-- RECEIPT EXPENSE FORM -->
       <form id="receiptForm" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Amount ($)</label>
-          <input type="number" id="receiptAmount" step="0.01" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500 text-lg">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Amount ($)</label>
+            <input type="number" id="receiptAmount" step="0.01" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500 text-lg">
+          </div>
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">Category</label>
@@ -132,10 +140,11 @@
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">Vendor / Notes</label>
-          <input type="text" id="receiptNotes" placeholder="e.g., Best Buy - HDMI cables" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border">
+          <input type="text" id="receiptNotes" list="vendorList" placeholder="Select or type a vendor..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 border focus:ring-indigo-500" autocomplete="off"/>
+          <datalist id="vendorList"></datalist>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700">Upload Receipt Image/PDF</label>
+          <label class="block text-sm font-medium text-gray-700">Upload Receipt Image/PDF <span id="existingFileNote" class="text-xs text-indigo-600 hidden ml-2">(File exists, upload to replace)</span></label>
           <input type="file" id="receiptFile" accept="image/*,application/pdf" class="mt-1 block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
         </div>
         <button id="btnReceipt" type="submit" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-indigo-700 active:scale-[0.98] transition">Log Receipt</button>
@@ -162,30 +171,78 @@
     </div>
 
     <!-- SECTION 2: HISTORY TAB VIEW -->
+<!-- SECTION 2: HISTORY TAB VIEW -->
     <div id="viewHistorySection" class="hidden space-y-4">
-      <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-        <div>
-          <div class="text-xs text-gray-500 uppercase font-bold tracking-wider">Sheet Summary Total</div>
-          <div id="sessionTotal" class="text-lg font-extrabold text-indigo-600">$0.00</div>
+      
+      <!-- DETAILED TOTALS DASHBOARD -->
+      <div class="bg-gray-50 rounded-xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
+        <div class="flex justify-between items-center bg-gray-100 px-4 py-2 border-b border-gray-200">
+          <span class="text-xs text-gray-600 font-bold uppercase tracking-wider">Sheet Totals</span>
+          <button id="btnFetchExpenses" type="button" class="text-[10px] bg-white hover:bg-gray-50 text-indigo-600 border border-indigo-200 px-2 py-1 rounded shadow-sm flex items-center gap-1 transition">
+            🔄 Refresh
+          </button>
         </div>
-        <button id="btnFetchExpenses" type="button" class="text-xs bg-white hover:bg-gray-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-lg font-medium transition shadow-sm flex items-center gap-1">
-          🔄 Refresh
-        </button>
+        <div class="grid grid-cols-2 divide-x divide-gray-200">
+          <!-- Expenses Breakout -->
+          <div class="p-4 space-y-2">
+            <div class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Expenses</div>
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-gray-600 font-medium">Paid</span>
+              <span id="totalPaid" class="text-sm font-extrabold text-indigo-600">$0.00</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-gray-600 font-medium">Unpaid</span>
+              <span id="totalUnpaid" class="text-sm font-bold text-rose-500">$0.00</span>
+            </div>
+          </div>
+          <!-- Mileage Breakout -->
+          <div class="p-4 flex flex-col justify-center">
+            <div class="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Total Mileage</div>
+            <div class="text-lg font-extrabold text-emerald-600"><span id="totalMiles">0</span> <span class="text-xs font-semibold text-emerald-500">mi</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FILTER BAR FOR PAID VS UNPAID -->
+      <div class="flex items-center justify-between bg-gray-100 p-1 rounded-lg text-xs font-medium">
+        <span class="text-gray-500 pl-2">Filter:</span>
+        <div class="flex gap-1">
+          <button id="filterAll" type="button" class="px-3 py-1 rounded-md bg-white text-gray-800 shadow font-semibold">All</button>
+          <button id="filterUnpaid" type="button" class="px-3 py-1 rounded-md text-gray-600 hover:text-gray-800">Unpaid</button>
+          <button id="filterPaid" type="button" class="px-3 py-1 rounded-md text-gray-600 hover:text-gray-800">Paid</button>
+        </div>
       </div>
 
       <!-- Scrollable list container -->
-      <div id="expenseList" class="space-y-2 max-h-96 overflow-y-auto pr-1 pt-2">
-        <p id="emptyListMsg" class="text-xs text-gray-400 text-center py-6 italic">Switching to view history...</p>
+      <div id="expenseList" class="space-y-3 max-h-96 overflow-y-auto pr-1 pt-2 pb-6">
+        <p class="text-xs text-gray-400 text-center py-6 italic">Switching to view history...</p>
       </div>
     </div>
 
   </div>
-
-  <footer class="text-center text-xs text-gray-400 mt-6">
-    <p>v2.2.0 (Tabbed View Edition)</p>
-  </footer>
+  <!-- INACTIVITY WARNING MODAL -->
+  <div id="timeoutModal" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-4">
+      <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto text-xl">
+        ⏰
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-gray-900">Are you still there?</h3>
+        <p class="text-xs text-gray-500 mt-1">
+          You will be logged out in <span id="timeoutCountdown" class="font-bold text-amber-600">30</span> seconds due to inactivity.
+        </p>
+      </div>
+      <div class="flex gap-2">
+        <button id="btnKeepAlive" type="button" class="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2.5 rounded-lg transition">
+          Stay Logged In
+        </button>
+        <button id="btnForceLogout" type="button" class="w-1/2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold py-2.5 rounded-lg transition">
+          Log Out
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="app.js"></script>
-
 </body>
 </html>

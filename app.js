@@ -27,7 +27,14 @@ googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
 googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 
 let currentUser = null;
-let totalExpenseAmount = 0;
+let existingVendors = [];
+
+// GLOBALS FOR EDITING AND FILTERING
+let editingRowIndex = null;
+let editingExistingDriveUrl = "";
+let editingStatus = "Unpaid"; // Holds the existing status when editing
+let currentFilter = "all"; // 'all', 'unpaid', 'paid'
+let rawRowsCache = []; // Cache rows for instant filtering
 
 // DOM ELEMENTS
 const authContainer = document.getElementById('authContainer');
@@ -51,11 +58,14 @@ onAuthStateChanged(auth, (user) => {
     authContainer.classList.add('hidden');
     appContainer.classList.remove('hidden');
     loadSheetSettings();
+    fetchVendorsFromSheet();
+    startInactivityTracking();
   } else {
     currentUser = null;
     sessionStorage.removeItem('google_access_token');
     authContainer.classList.remove('hidden');
     appContainer.classList.add('hidden');
+    stopInactivityTracking();
   }
 });
 
@@ -91,6 +101,7 @@ document.getElementById('btnGoogle').addEventListener('click', async () => {
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (credential && credential.accessToken) {
       sessionStorage.setItem('google_access_token', credential.accessToken);
+      await fetchVendorsFromSheet();
     }
   } catch (err) { showError(err.message); }
 });
@@ -112,7 +123,6 @@ function switchNavTab(tab) {
     navTabHistory.className = activeClass;
     viewLogSection.classList.add('hidden');
     viewHistorySection.classList.remove('hidden');
-    // Fetch fresh expenses every time user switches to History Tab
     fetchAllExpensesFromSheet();
   }
 }
@@ -130,7 +140,7 @@ function switchForm(type) {
   const activeStyle = "w-1/2 py-1.5 text-xs font-medium rounded-md bg-white text-gray-800 shadow";
   const inactiveStyle = "w-1/2 py-1.5 text-xs font-medium rounded-md text-gray-600";
 
-  if (type === 'receipt') {
+  if (type === 'receipt' || type.toLowerCase() === 'receipt') {
     receiptForm.classList.remove('hidden');
     mileageForm.classList.add('hidden');
     tabReceipt.className = activeStyle;
@@ -147,6 +157,19 @@ document.getElementById('tabReceipt').addEventListener('click', () => switchForm
 document.getElementById('tabMileage').addEventListener('click', () => switchForm('mileage'));
 document.getElementById('btnSaveConfig').addEventListener('click', saveSheetSettings);
 document.getElementById('btnFetchExpenses').addEventListener('click', fetchAllExpensesFromSheet);
+
+// CANCEL EDIT
+document.getElementById('btnCancelEdit').addEventListener('click', () => {
+  editingRowIndex = null;
+  editingExistingDriveUrl = "";
+  editingStatus = "Unpaid";
+  document.getElementById('editBanner').classList.add('hidden');
+  document.getElementById('btnReceipt').innerText = "Log Receipt";
+  document.getElementById('btnMileage').innerText = "Log Mileage";
+  document.getElementById('existingFileNote').classList.add('hidden');
+  document.getElementById('receiptForm').reset();
+  document.getElementById('mileageForm').reset();
+});
 
 // CONFIG & SETTINGS
 function updateSheetBadgeDisplay(sheetId, tabName) {
@@ -176,6 +199,7 @@ function saveSheetSettings() {
   localStorage.setItem('user_tab_name', tabName);
   
   updateSheetBadgeDisplay(sheetId, tabName);
+  fetchVendorsFromSheet();
   alert("Sheet Settings Saved!");
 }
 
@@ -189,12 +213,72 @@ function loadSheetSettings() {
   updateSheetBadgeDisplay(savedSheetId, savedTabName);
 }
 
-// REST API GOOGLE SHEETS & DRIVE
+// VENDORS TAB MANAGEMENT
+async function fetchVendorsFromSheet() {
+  const sheetId = localStorage.getItem('user_sheet_id') || document.getElementById('customSheetId')?.value.trim();
+  const accessToken = sessionStorage.getItem('google_access_token');
+  const datalist = document.getElementById('vendorList');
+
+  if (!sheetId || !accessToken || !datalist) return;
+
+  const endpoint = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Vendors!A:A`;
+
+  try {
+    const response = await fetch(endpoint, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!response.ok) return;
+
+    const data = await response.json();
+    const rows = data.values || [];
+
+    existingVendors = rows.flat().filter(v => v && !['vendor', 'vendors'].includes(v.toLowerCase()));
+
+    datalist.innerHTML = existingVendors
+      .map(vendor => `<option value="${vendor}"></option>`)
+      .join('');
+  } catch (err) {
+    console.warn("Could not fetch vendors:", err);
+  }
+}
+
+async function appendVendorIfNew(vendorName) {
+  const sheetId = localStorage.getItem('user_sheet_id') || document.getElementById('customSheetId').value.trim();
+  const accessToken = sessionStorage.getItem('google_access_token');
+  const cleanVendor = vendorName ? vendorName.trim() : "";
+
+  if (!cleanVendor || !sheetId || !accessToken) return;
+
+  const exists = existingVendors.some(v => v.toLowerCase() === cleanVendor.toLowerCase());
+
+  if (!exists) {
+    const endpoint = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Vendors!A:A:append?valueInputOption=USER_ENTERED`;
+
+    try {
+      await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ values: [[cleanVendor]] })
+      });
+
+      existingVendors.push(cleanVendor);
+      const datalist = document.getElementById('vendorList');
+      if (datalist) datalist.insertAdjacentHTML('beforeend', `<option value="${cleanVendor}"></option>`);
+    } catch (err) {}
+  }
+}
+
+// ==========================================
+// FETCH, FILTER, EDIT, AND DUPLICATE LOGIC
+// ==========================================
 async function fetchAllExpensesFromSheet() {
   const sheetId = localStorage.getItem('user_sheet_id') || document.getElementById('customSheetId').value.trim();
   const tabName = localStorage.getItem('user_tab_name') || document.getElementById('customTabName').value.trim() || "Sheet1";
   const accessToken = sessionStorage.getItem('google_access_token');
-
   const expenseList = document.getElementById('expenseList');
 
   if (!sheetId || !accessToken) {
@@ -204,12 +288,10 @@ async function fetchAllExpensesFromSheet() {
 
   expenseList.innerHTML = `<p class="text-xs text-gray-400 text-center py-6 italic">Fetching records from Google Sheet...</p>`;
 
-  const endpoint = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A:H`;
+  const endpoint = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A:I`;
 
   try {
-    const response = await fetch(endpoint, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
+    const response = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${accessToken}` } });
 
     if (!response.ok) {
       const err = await response.json();
@@ -219,40 +301,10 @@ async function fetchAllExpensesFromSheet() {
     const data = await response.json();
     const rows = data.values || [];
 
-    expenseList.innerHTML = "";
-    totalExpenseAmount = 0;
+    // Cache indexed rows for quick filtering
+    rawRowsCache = rows.map((row, index) => ({ data: row, rowIndex: index + 1 }));
 
-    if (rows.length === 0) {
-      expenseList.innerHTML = `<p class="text-xs text-gray-400 text-center py-6 italic">No expenses found in this sheet tab.</p>`;
-      document.getElementById('sessionTotal').innerText = `$0.00`;
-      return;
-    }
-
-    const reverseRows = [...rows].reverse();
-
-    reverseRows.forEach(row => {
-      const [date, user, type, category, amount, mileage, notes, driveUrl] = row;
-
-      if (date && date.toLowerCase() === "date") return;
-
-      let displayVal = "";
-      if (amount && parseFloat(amount)) {
-        const parsedAmt = parseFloat(amount);
-        totalExpenseAmount += parsedAmt;
-        displayVal = `$${parsedAmt.toFixed(2)}`;
-      } else if (mileage) {
-        displayVal = `${mileage} mi`;
-      } else {
-        displayVal = "-";
-      }
-
-      const title = category || type || "Expense";
-      const subtitle = notes ? `${notes} • ${date || ''}` : (date || '');
-
-      addExpenseToList(title, subtitle, displayVal, driveUrl);
-    });
-
-    document.getElementById('sessionTotal').innerText = `$${totalExpenseAmount.toFixed(2)}`;
+    renderFilteredExpenses();
 
   } catch (err) {
     console.error("Fetch Error:", err);
@@ -260,6 +312,157 @@ async function fetchAllExpensesFromSheet() {
   }
 }
 
+function renderFilteredExpenses() {
+  const expenseList = document.getElementById('expenseList');
+  expenseList.innerHTML = "";
+
+  let totalPaid = 0;
+  let totalUnpaid = 0;
+  let totalMiles = 0;
+
+  // 1. Calculate overall sheet totals regardless of current view filter
+  rawRowsCache.forEach(item => {
+    const [date, user, type, amount, category, miles, notes, driveUrl, status] = item.data;
+    if (date && date.toLowerCase() === "date") return;
+
+    const isPaid = status && status.toLowerCase() === "paid";
+    if (amount && parseFloat(amount)) {
+      const parsedAmt = parseFloat(amount);
+      if (isPaid) totalPaid += parsedAmt; else totalUnpaid += parsedAmt;
+    } else if (miles && parseFloat(miles)) {
+      totalMiles += parseFloat(miles);
+    }
+  });
+
+  updateDashboardTotals(totalPaid, totalUnpaid, totalMiles);
+
+  // 2. Filter rows for display
+  const reverseRows = [...rawRowsCache].reverse();
+  let renderedCount = 0;
+
+  reverseRows.forEach(item => {
+    const row = item.data;
+    const rIndex = item.rowIndex;
+    const [date, user, type, amount, category, miles, notes, driveUrl, status] = row;
+
+    if (date && date.toLowerCase() === "date") return; // Skip header
+
+    const isPaid = status && status.toLowerCase() === "paid";
+
+    // Apply Filter Logic
+    if (currentFilter === "unpaid" && isPaid) return;
+    if (currentFilter === "paid" && !isPaid) return;
+
+    renderedCount++;
+    let displayVal = "-";
+
+    if (amount && parseFloat(amount)) {
+      displayVal = `$${parseFloat(amount).toFixed(2)}`;
+    } else if (miles && parseFloat(miles)) {
+      displayVal = `${miles} mi`;
+    }
+
+    const title = row[3] && parseFloat(row[3]) ? row[4] : (type || "Expense");
+    const subtitle = notes ? `${notes} • ${date || ''}` : (date || '');
+
+    renderExpenseCard(row, rIndex, title, subtitle, displayVal, driveUrl, isPaid);
+  });
+
+  if (renderedCount === 0) {
+    expenseList.innerHTML = `<p class="text-xs text-gray-400 text-center py-6 italic">No ${currentFilter !== 'all' ? currentFilter : ''} entries found.</p>`;
+  }
+}
+
+function updateDashboardTotals(paid, unpaid, miles) {
+  document.getElementById('totalPaid').innerText = `$${paid.toFixed(2)}`;
+  document.getElementById('totalUnpaid').innerText = `$${unpaid.toFixed(2)}`;
+  document.getElementById('totalMiles').innerText = miles.toFixed(1);
+}
+
+function renderExpenseCard(row, rowIndex, title, subtitle, amountOrMiles, driveUrl, isPaid) {
+  const expenseList = document.getElementById('expenseList');
+  const itemCard = document.createElement('div');
+  itemCard.className = "bg-white border border-gray-200 rounded-lg p-3 text-xs shadow-sm flex flex-col gap-2";
+
+  let linkBadge = driveUrl ? `<a href="${driveUrl}" target="_blank" class="text-[10px] text-indigo-600 hover:underline flex items-center gap-0.5 mt-0.5">📎 View Receipt</a>` : "";
+  let statusBadge = isPaid 
+    ? `<span class="bg-indigo-100 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider">Paid</span>` 
+    : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider">Unpaid</span>`;
+
+  itemCard.innerHTML = `
+    <div class="flex justify-between items-start">
+      <div class="truncate mr-2">
+        <div class="font-semibold text-gray-800 flex items-center gap-2">${title} ${statusBadge}</div>
+        <div class="text-gray-500 text-[11px] mt-0.5">${subtitle}</div>
+        ${linkBadge}
+      </div>
+      <div class="font-bold text-gray-700 bg-gray-50 px-2 py-1 rounded border border-gray-200 whitespace-nowrap">
+        ${amountOrMiles}
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-gray-100 pt-2 mt-1">
+      <button type="button" class="btn-duplicate text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded font-medium transition">Duplicate</button>
+      <button type="button" class="btn-edit text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded font-medium transition">Edit</button>
+    </div>
+  `;
+
+  itemCard.querySelector('.btn-duplicate').addEventListener('click', () => loadFormWithData(row, null));
+  itemCard.querySelector('.btn-edit').addEventListener('click', () => loadFormWithData(row, rowIndex));
+
+  expenseList.appendChild(itemCard);
+}
+
+function loadFormWithData(row, rowIndexTarget) {
+  const [date, user, type, amount, category, miles, notes, driveUrl, status] = row;
+  const isEditing = rowIndexTarget !== null;
+
+  switchNavTab('log');
+  switchForm(type || 'receipt');
+
+  if (isEditing) {
+    editingRowIndex = rowIndexTarget;
+    editingExistingDriveUrl = driveUrl || "";
+    editingStatus = status || "Unpaid"; // Maintain current status on edit
+    document.getElementById('editBanner').classList.remove('hidden');
+    document.getElementById('btnReceipt').innerText = "Update Receipt Entry";
+    document.getElementById('btnMileage').innerText = "Update Mileage Entry";
+    if (driveUrl) document.getElementById('existingFileNote').classList.remove('hidden');
+  } else {
+    document.getElementById('btnCancelEdit').click();
+  }
+
+  const formType = (type || 'receipt').toLowerCase();
+  if (formType === 'receipt') {
+    document.getElementById('receiptAmount').value = amount || "";
+    if (category) document.getElementById('receiptCategory').value = category;
+    document.getElementById('receiptNotes').value = notes || "";
+  } else {
+    document.getElementById('startOdo').value = 0;
+    document.getElementById('endOdo').value = miles || "";
+    document.getElementById('mileageNotes').value = notes || "";
+  }
+  
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// FILTER CONTROLS
+function setFilter(filterType) {
+  currentFilter = filterType;
+  const activeBtnStyle = "px-3 py-1 rounded-md bg-white text-gray-800 shadow font-semibold";
+  const inactiveBtnStyle = "px-3 py-1 rounded-md text-gray-600 hover:text-gray-800";
+
+  document.getElementById('filterAll').className = filterType === 'all' ? activeBtnStyle : inactiveBtnStyle;
+  document.getElementById('filterUnpaid').className = filterType === 'unpaid' ? activeBtnStyle : inactiveBtnStyle;
+  document.getElementById('filterPaid').className = filterType === 'paid' ? activeBtnStyle : inactiveBtnStyle;
+
+  renderFilteredExpenses();
+}
+
+document.getElementById('filterAll').addEventListener('click', () => setFilter('all'));
+document.getElementById('filterUnpaid').addEventListener('click', () => setFilter('unpaid'));
+document.getElementById('filterPaid').addEventListener('click', () => setFilter('paid'));
+
+// UPLOAD TO DRIVE
 async function uploadFileToGoogleDrive(file, accessToken) {
   const metadata = { name: `Receipt_${Date.now()}_${file.name}`, mimeType: file.type };
   const boundary = '-------314159265358979323846';
@@ -293,11 +496,7 @@ async function uploadFileToGoogleDrive(file, accessToken) {
           body: multipartRequestBody
         });
 
-        if (!response.ok) {
-          const errorJson = await response.json();
-          throw new Error(errorJson.error ? errorJson.error.message : 'Drive Upload Failed');
-        }
-
+        if (!response.ok) throw new Error('Drive Upload Failed');
         const data = await response.json();
         resolve(data.webViewLink);
       } catch (err) { reject(err); }
@@ -307,31 +506,7 @@ async function uploadFileToGoogleDrive(file, accessToken) {
   });
 }
 
-function addExpenseToList(title, subtitle, amountOrMiles, driveUrl) {
-  const expenseList = document.getElementById('expenseList');
-
-  const itemCard = document.createElement('div');
-  itemCard.className = "bg-gray-50 border border-gray-200 rounded-lg p-3 flex justify-between items-center text-xs";
-
-  let linkBadge = "";
-  if (driveUrl) {
-    linkBadge = `<a href="${driveUrl}" target="_blank" class="text-[10px] text-indigo-600 hover:underline flex items-center gap-0.5 mt-0.5">📎 View Receipt</a>`;
-  }
-
-  itemCard.innerHTML = `
-    <div class="truncate mr-2">
-      <div class="font-semibold text-gray-800">${title}</div>
-      <div class="text-gray-500 text-[11px]">${subtitle}</div>
-      ${linkBadge}
-    </div>
-    <div class="font-bold text-gray-700 bg-white px-2 py-1 rounded border border-gray-200 whitespace-nowrap">
-      ${amountOrMiles}
-    </div>
-  `;
-
-  expenseList.appendChild(itemCard);
-}
-
+// SUBMIT / UPDATE LOGIC
 async function handleFormSubmit(event, type) {
   event.preventDefault();
 
@@ -343,33 +518,37 @@ async function handleFormSubmit(event, type) {
   if (!accessToken) { alert("To post directly to Google Sheets & Drive, you must sign in using 'Sign in with Google'."); return; }
 
   const btn = type === 'receipt' ? document.getElementById('btnReceipt') : document.getElementById('btnMileage');
-  const originalText = btn.innerText;
 
   const userEmail = currentUser && currentUser.email ? currentUser.email : "Anonymous";
   const date = new Date().toLocaleDateString();
 
   let rowData = [];
-  let uploadedReceiptLink = "";
+  let uploadedReceiptLink = editingRowIndex ? editingExistingDriveUrl : "";
+  
+  // Status defaults to "Unpaid" for new entries, or retains existing status if editing
+  const entryStatus = editingRowIndex ? editingStatus : "Unpaid";
 
   try {
     if (type === 'receipt') {
       const amount = parseFloat(document.getElementById('receiptAmount').value) || 0;
       const category = document.getElementById('receiptCategory').value;
-      const notes = document.getElementById('receiptNotes').value;
+      const notes = document.getElementById('receiptNotes').value.trim();
       const fileInput = document.getElementById('receiptFile');
 
+      if (notes) await appendVendorIfNew(notes);
+
       if (fileInput && fileInput.files.length > 0) {
-        btn.innerText = "Uploading Receipt to Drive...";
+        btn.innerText = "Uploading Receipt...";
         btn.disabled = true;
         uploadedReceiptLink = await uploadFileToGoogleDrive(fileInput.files[0], accessToken);
       }
 
-      btn.innerText = "Writing to Google Sheet...";
+      btn.innerText = editingRowIndex ? "Updating Sheet..." : "Writing to Sheet...";
       btn.disabled = true;
 
-      rowData = [date, userEmail, type, category, amount.toFixed(2), "", notes, uploadedReceiptLink];
+      rowData = [date, userEmail, "Receipt", amount.toFixed(2), category, "", notes, uploadedReceiptLink, entryStatus];
     } else {
-      btn.innerText = "Writing to Google Sheet...";
+      btn.innerText = editingRowIndex ? "Updating Sheet..." : "Writing to Sheet...";
       btn.disabled = true;
 
       const start = parseFloat(document.getElementById('startOdo').value);
@@ -377,13 +556,19 @@ async function handleFormSubmit(event, type) {
       const miles = end - start;
       const notes = document.getElementById('mileageNotes').value;
       
-      rowData = [date, userEmail, type, "Mileage", "", miles, notes, ""];
+      rowData = [date, userEmail, "Mileage", "", "Mileage", miles, notes, "", entryStatus];
     }
 
-    const endpoint = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A:H:append?valueInputOption=USER_ENTERED`;
+    let method = 'POST';
+    let endpoint = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A:I:append?valueInputOption=USER_ENTERED`;
+    
+    if (editingRowIndex) {
+      method = 'PUT';
+      endpoint = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A${editingRowIndex}:I${editingRowIndex}?valueInputOption=USER_ENTERED`;
+    }
 
     const response = await fetch(endpoint, {
-      method: 'POST',
+      method: method,
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
@@ -396,17 +581,84 @@ async function handleFormSubmit(event, type) {
       throw new Error(errData.error ? errData.error.message : "Failed to write to sheet");
     }
 
-    alert(`Logged a ${type} entry successfully!`);
-    event.target.reset();
+    alert(editingRowIndex ? "Entry updated successfully!" : `Logged a ${type} entry successfully!`);
+    
+    document.getElementById('btnCancelEdit').click();
 
   } catch (error) {
     console.error("REST API Error:", error);
     alert(`Error: ${error.message}`);
   } finally {
-    btn.innerText = originalText;
+    btn.innerText = type === 'receipt' ? "Log Receipt" : "Log Mileage";
     btn.disabled = false;
   }
 }
+
+// ==========================================
+// SESSION TIMEOUT & COUNTDOWN MODAL CONFIG
+// ==========================================
+const IDLE_TIME_LIMIT = 15 * 60 * 1000;
+const COUNTDOWN_SECONDS = 30;
+
+let idleTimer = null;
+let countdownInterval = null;
+let secondsRemaining = COUNTDOWN_SECONDS;
+
+const timeoutModal = document.getElementById('timeoutModal');
+const timeoutCountdown = document.getElementById('timeoutCountdown');
+const btnKeepAlive = document.getElementById('btnKeepAlive');
+const btnForceLogout = document.getElementById('btnForceLogout');
+
+function resetIdleTimer() {
+  if (!currentUser) return;
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(showTimeoutModal, IDLE_TIME_LIMIT);
+}
+
+function showTimeoutModal() {
+  detachActivityListeners();
+  secondsRemaining = COUNTDOWN_SECONDS;
+  timeoutCountdown.innerText = secondsRemaining;
+  timeoutModal.classList.remove('hidden');
+
+  countdownInterval = setInterval(() => {
+    secondsRemaining -= 1;
+    timeoutCountdown.innerText = secondsRemaining;
+    if (secondsRemaining <= 0) performTimeoutLogout();
+  }, 1000);
+}
+
+function hideTimeoutModal() {
+  clearInterval(countdownInterval);
+  timeoutModal.classList.add('hidden');
+  attachActivityListeners();
+  resetIdleTimer();
+}
+
+function performTimeoutLogout() {
+  clearInterval(countdownInterval);
+  timeoutModal.classList.add('hidden');
+  signOut(auth).then(() => alert("Session expired due to inactivity."));
+}
+
+const activityEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+function attachActivityListeners() { activityEvents.forEach(evt => window.addEventListener(evt, resetIdleTimer, { passive: true })); }
+function detachActivityListeners() { activityEvents.forEach(evt => window.removeEventListener(evt, resetIdleTimer)); }
+
+function startInactivityTracking() {
+  attachActivityListeners();
+  resetIdleTimer();
+}
+
+function stopInactivityTracking() {
+  clearTimeout(idleTimer);
+  clearInterval(countdownInterval);
+  detachActivityListeners();
+  timeoutModal.classList.add('hidden');
+}
+
+btnKeepAlive.addEventListener('click', hideTimeoutModal);
+btnForceLogout.addEventListener('click', performTimeoutLogout);
 
 document.getElementById('receiptForm').addEventListener('submit', (e) => handleFormSubmit(e, 'receipt'));
 document.getElementById('mileageForm').addEventListener('submit', (e) => handleFormSubmit(e, 'mileage'));
