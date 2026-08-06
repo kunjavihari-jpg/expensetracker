@@ -66,6 +66,7 @@ onAuthStateChanged(auth, (user) => {
     }
     loadSheetSettings();
     fetchVendorsFromSheet();
+    fetchCategoriesFromSheet(); 
     startInactivityTracking();
   } else {
     currentUser = null;
@@ -109,6 +110,7 @@ document.getElementById('btnGoogle').addEventListener('click', async () => {
     if (credential && credential.accessToken) {
       sessionStorage.setItem('google_access_token', credential.accessToken);
       await fetchVendorsFromSheet();
+      await fetchCategoriesFromSheet();
     }
   } catch (err) { showError(err.message); }
 });
@@ -243,6 +245,7 @@ function saveSheetSettings() {
   
   updateSheetBadgeDisplay(sheetId, tabName);
   fetchVendorsFromSheet();
+  fetchCategoriesFromSheet();
   alert("Sheet Settings Saved!");
 }
 
@@ -635,6 +638,59 @@ async function handleFormSubmit(event, type) {
     btn.innerText = type === 'receipt' ? "Log Receipt" : "Log Mileage";
     btn.disabled = false;
   }
+}
+
+let existingCategories = [];
+
+// Fetch categories from the 3rd Tab ("Categories")
+async function fetchCategoriesFromSheet() {
+  const sheetId = localStorage.getItem('user_sheet_id');
+  const token = sessionStorage.getItem('google_access_token');
+  if (!sheetId || !token) return;
+
+  try {
+    const range = "Categories!A2:A";
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.values && data.values.length > 0) {
+        // Flatten array and filter out empty rows
+        existingCategories = data.values.map(row => row[0]).filter(Boolean);
+        console.log("Fetched categories");
+      } else {
+        // Fallback default categories if tab is empty
+        existingCategories = ["Office Supplies", "Meals & Entertainment", "Software & Subscriptions", "Travel & Lodging", "Marketing & Advertising"];
+        console.log("Fetched categories, tab is empty");
+      }
+    } else {
+      // Fallback defaults if Categories tab doesn't exist yet
+      existingCategories = ["Office Supplies", "Meals & Entertainment", "Software & Subscriptions", "Travel & Lodging", "Marketing & Advertising"];
+        console.log("Fetched categories, Tab does not exist");
+    }
+    populateCategoryDropdown();
+  } catch (err) {
+    console.error("Error fetching categories:", err);
+  }
+}
+
+// Populate Category <select> dropdown in index.html
+function populateCategoryDropdown() {
+  const categorySelect = document.getElementById('receiptCategory');
+  console.log("checking categoryselect");
+  if (!categorySelect) return;
+
+  // Preserve initial placeholder option
+  categorySelect.innerHTML = `<option value="">Select Category...</option>`;
+  console.log("populated dropdown");
+  existingCategories.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    categorySelect.appendChild(opt);
+  });
 }
 
 // ==========================================

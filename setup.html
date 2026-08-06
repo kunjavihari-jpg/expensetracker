@@ -76,59 +76,74 @@
 
         statusText.innerText = "Creating Google Sheet template...";
 
-        // 1. CREATE SPREADSHEET WITH 'Sheet1' AND 'Vendors' TABS
-        const createResponse = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            properties: { title: `BizExpense Tracker - ${new Date().getFullYear()}` },
-            sheets: [
-              { properties: { title: 'Sheet1' } },
-              { properties: { title: 'Vendors' } }
-            ]
-          })
-        });
+// 1. CREATE SPREADSHEET WITH 'Sheet1', 'Vendors', AND 'Categories' TABS
+const createResponse = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    properties: { title: `BizExpense Tracker - ${new Date().getFullYear()}` },
+    sheets: [
+      { properties: { title: 'Sheet1' } },
+      { properties: { title: 'Vendors' } },
+      { properties: { title: 'Categories' } } // <--- Added Tab 3
+    ]
+  })
+});
 
-        if (!createResponse.ok) throw new Error("Failed to create spreadsheet.");
+if (!createResponse.ok) throw new Error("Failed to create spreadsheet.");
 
-        const sheetData = await createResponse.json();
-        const sheetId = sheetData.spreadsheetId;
+const sheetData = await createResponse.json();
+const sheetId = sheetData.spreadsheetId;
 
-        statusText.innerText = "Formatting headers & initial vendors...";
+statusText.innerText = "Formatting headers, vendors, and categories...";
 
-        // 2. POPULATE HEADERS IN SHEET1 AND VENDORS
-        const batchUpdateResponse = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            valueInputOption: "USER_ENTERED",
-            data: [
-              {
-                range: "Sheet1!A1:I1",
-                values: [["Date", "User", "Type", "Amount", "Category", "Miles", "Notes", "Receipt Link", "Status"]]
-              },
-              {
-                range: "Vendors!A1:A5",
-                values: [
-                  ["Vendor Name"],
-                  ["Office Supplies"],
-                  ["Meals & Entertainment"],
-                  ["Software/Subscriptions"],
-                  ["Marketing/Ads"]
-                ]
-              }
-            ]
-          })
-        });
+// 2. POPULATE HEADERS & INITIAL VALUES IN ALL THREE TABS
+const batchUpdateResponse = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    valueInputOption: "USER_ENTERED",
+    data: [
+      // Tab 1: Sheet1 Headers
+      {
+        range: "Sheet1!A1:I1",
+        values: [["Date", "User", "Type", "Amount", "Category", "Miles", "Notes", "Receipt Link", "Status"]]
+      },
+      // Tab 2: Default Vendors
+      {
+        range: "Vendors!A1:A5",
+        values: [
+          ["Vendor Name"],
+          ["Office Supplies Co"],
+          ["Uber / Lyft"],
+          ["Amazon"],
+          ["Software SaaS"]
+        ]
+      },
+      // Tab 3: Default Expense Categories
+      {
+        range: "Categories!A1:A7",
+        values: [
+          ["Category Name"],
+          ["Office Supplies"],
+          ["Meals & Entertainment"],
+          ["Software & Subscriptions"],
+          ["Travel & Lodging"],
+          ["Marketing & Advertising"],
+          ["Professional Services"]
+        ]
+      }
+    ]
+  })
+});
 
-        if (!batchUpdateResponse.ok) throw new Error("Failed to populate headers.");
-
+if (!batchUpdateResponse.ok) throw new Error("Failed to populate initial headers and categories.");
         // 3. SAVE SHEET ID TO LOCAL STORAGE FOR THE APP
         localStorage.setItem('user_sheet_id', sheetId);
         localStorage.setItem('user_tab_name', 'Sheet1');
