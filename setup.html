@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Setup - BizExpense Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4 font-sans">
+
+  <div class="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 text-center space-y-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">BizExpense Setup</h1>
+      <p class="text-xs text-gray-500 mt-1">Automatically create and configure your expense tracking spreadsheet in Google Drive.</p>
+    </div>
+
+    <!-- ACTION BUTTON -->
+    <button id="btnCreateSheet" type="button" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg shadow active:scale-[0.98] transition flex items-center justify-center space-x-2">
+      <span>🚀 Auto-Create My Google Sheet</span>
+    </button>
+
+    <!-- STATUS DISPLAY -->
+    <div id="statusBox" class="hidden text-xs text-left p-3 rounded-lg bg-gray-50 border border-gray-200 space-y-2">
+      <div id="statusText" class="font-medium text-gray-700">Initializing...</div>
+      <div id="sheetLinkContainer" class="hidden pt-2 border-t border-gray-200">
+        <a id="sheetLink" href="#" target="_blank" class="text-indigo-600 font-semibold hover:underline flex items-center gap-1">
+          📊 Open Created Sheet ↗
+        </a>
+      </div>
+    </div>
+
+    <div class="text-xs text-gray-400">
+      <a href="index.html" class="text-gray-600 hover:underline">← Back to Main App</a>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCxo6I0UZj-_FuqCiDfSzgieWQf6iQKfBA",
+      authDomain: "businessexpense.firebaseapp.com",
+      projectId: "businessexpense",
+      storageBucket: "businessexpense.firebasestorage.app",
+      messagingSenderId: "29454321253",
+      appId: "1:29454321253:web:969f4a4ef4e350daf1a88c"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const googleProvider = new GoogleAuthProvider();
+    googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
+    googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+
+    const btnCreateSheet = document.getElementById('btnCreateSheet');
+    const statusBox = document.getElementById('statusBox');
+    const statusText = document.getElementById('statusText');
+    const sheetLinkContainer = document.getElementById('sheetLinkContainer');
+    const sheetLink = document.getElementById('sheetLink');
+
+    btnCreateSheet.addEventListener('click', async () => {
+      statusBox.classList.remove('hidden');
+      sheetLinkContainer.classList.add('hidden');
+      btnCreateSheet.disabled = true;
+
+      try {
+        statusText.innerText = "Authenticating with Google...";
+        const result = await signInWithPopup(auth, googleProvider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const accessToken = credential?.accessToken;
+
+        if (!accessToken) throw new Error("Could not retrieve Google Access Token.");
+
+        sessionStorage.setItem('google_access_token', accessToken);
+
+        statusText.innerText = "Creating Google Sheet template...";
+
+        // 1. CREATE SPREADSHEET WITH 'Sheet1' AND 'Vendors' TABS
+        const createResponse = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            properties: { title: `BizExpense Tracker - ${new Date().getFullYear()}` },
+            sheets: [
+              { properties: { title: 'Sheet1' } },
+              { properties: { title: 'Vendors' } }
+            ]
+          })
+        });
+
+        if (!createResponse.ok) throw new Error("Failed to create spreadsheet.");
+
+        const sheetData = await createResponse.json();
+        const sheetId = sheetData.spreadsheetId;
+
+        statusText.innerText = "Formatting headers & initial vendors...";
+
+        // 2. POPULATE HEADERS IN SHEET1 AND VENDORS
+        const batchUpdateResponse = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            valueInputOption: "USER_ENTERED",
+            data: [
+              {
+                range: "Sheet1!A1:I1",
+                values: [["Date", "User", "Type", "Amount", "Category", "Miles", "Notes", "Receipt Link", "Status"]]
+              },
+              {
+                range: "Vendors!A1:A5",
+                values: [
+                  ["Vendor Name"],
+                  ["Office Supplies"],
+                  ["Meals & Entertainment"],
+                  ["Software/Subscriptions"],
+                  ["Marketing/Ads"]
+                ]
+              }
+            ]
+          })
+        });
+
+        if (!batchUpdateResponse.ok) throw new Error("Failed to populate headers.");
+
+        // 3. SAVE SHEET ID TO LOCAL STORAGE FOR THE APP
+        localStorage.setItem('user_sheet_id', sheetId);
+        localStorage.setItem('user_tab_name', 'Sheet1');
+
+        statusText.innerHTML = `✅ <span class="text-emerald-700 font-bold">Sheet created successfully!</span> Settings saved.`;
+        sheetLink.href = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+        sheetLinkContainer.classList.remove('hidden');
+
+        // Add a button to return straight to the main app
+        const btnGoToApp = document.createElement('a');
+        btnGoToApp.href = "index.html";
+        btnGoToApp.className = "mt-3 block w-full text-center bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-lg text-xs transition";
+        btnGoToApp.innerText = "➡️ Launch BizExpense Tracker";
+        statusBox.appendChild(btnGoToApp);
+
+      } catch (err) {
+        console.error(err);
+        statusText.innerHTML = `❌ <span class="text-rose-600 font-bold">Error:</span> ${err.message}`;
+      } finally {
+        btnCreateSheet.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

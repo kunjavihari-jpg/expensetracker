@@ -57,6 +57,13 @@ onAuthStateChanged(auth, (user) => {
     userEmailDisplay.innerText = user.email;
     authContainer.classList.add('hidden');
     appContainer.classList.remove('hidden');
+    const savedSheetId = localStorage.getItem('user_sheet_id');
+
+    // If a new user logs in and hasn't configured a sheet yet, redirect to setup
+    if (!savedSheetId) {
+      window.location.href = "setup.html";
+      return;
+    }
     loadSheetSettings();
     fetchVendorsFromSheet();
     startInactivityTracking();
@@ -176,18 +183,54 @@ function updateSheetBadgeDisplay(sheetId, tabName) {
   const displaySheetId = document.getElementById('displaySheetId');
   const displayTabName = document.getElementById('displayTabName');
   const btnOpenSheet = document.getElementById('btnOpenSheet');
+  const btnForgetSheet = document.getElementById('btnForgetSheet');
 
   if (sheetId) {
     displaySheetId.innerText = sheetId.length > 15 ? `${sheetId.substring(0, 8)}...${sheetId.substring(sheetId.length - 4)}` : sheetId;
     displayTabName.innerText = tabName || "Sheet1";
     btnOpenSheet.href = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
     btnOpenSheet.classList.remove('hidden');
+    btnForgetSheet.classList.remove('hidden');
   } else {
     displaySheetId.innerText = "Not set";
     displayTabName.innerText = "None";
     btnOpenSheet.classList.add('hidden');
+    btnForgetSheet.classList.add('hidden');
   }
 }
+
+function forgetSheet() {
+  const confirmAction = confirm(
+    "Disconnect active spreadsheet?\n\nThis will clear the current sheet connection from this browser. Your data inside Google Drive will NOT be deleted."
+  );
+
+  if (!confirmAction) return;
+
+  // Clear local storage
+  localStorage.removeItem('user_sheet_id');
+  localStorage.removeItem('user_tab_name');
+
+  // Clear vendor cache & forms
+  existingVendors = [];
+  rawRowsCache = [];
+  document.getElementById('customSheetId').value = "";
+  document.getElementById('customTabName').value = "Sheet1";
+  
+  // Update badge display
+  updateSheetBadgeDisplay(null, null);
+
+  // Automatically expand settings section so user can input new sheet or auto-create
+  const settingsDetails = document.getElementById('settingsDetails');
+  if (settingsDetails) settingsDetails.open = true;
+
+  // Refresh history UI to reflect cleared state
+  renderFilteredExpenses();
+
+  alert("Sheet disconnected. You can now auto-create a new sheet or paste a different Sheet ID.");
+}
+
+// Event Listener
+document.getElementById('btnForgetSheet').addEventListener('click', forgetSheet);
 
 function saveSheetSettings() {
   const sheetId = document.getElementById('customSheetId').value.trim();
