@@ -61,7 +61,9 @@ onAuthStateChanged(auth, (user) => {
 
     // If a new user logs in and hasn't configured a sheet yet, redirect to setup
     if (!savedSheetId) {
-      window.location.href = "setup.html";
+      const settingsDetails = document.getElementById('settingsDetails');
+      if (settingsDetails) settingsDetails.open = true;
+      updateSheetBadgeDisplay(null, null);
       return;
     }
     loadSheetSettings();
