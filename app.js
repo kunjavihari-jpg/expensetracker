@@ -8,6 +8,7 @@ import {
   signOut, 
   onAuthStateChanged 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { initVoiceRecognition } from "./voice.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCxo6I0UZj-_FuqCiDfSzgieWQf6iQKfBA",
@@ -28,6 +29,7 @@ googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 
 let currentUser = null;
 let existingVendors = [];
+let existingCategories = [];
 
 // GLOBALS FOR EDITING AND FILTERING
 let editingRowIndex = null;
@@ -432,7 +434,7 @@ function renderExpenseCard(row, rowIndex, title, subtitle, amountOrMiles, driveU
   const itemCard = document.createElement('div');
   itemCard.className = "bg-white border border-gray-200 rounded-lg p-3 text-xs shadow-sm flex flex-col gap-2";
 
-  let linkBadge = driveUrl ? `<a href="${driveUrl}" target="_blank" class="text-[10px] text-indigo-600 hover:underline flex items-center gap-0.5 mt-0.5">📎 View Receipt</a>` : "";
+  let linkBadge = driveUrl ? `<a href="${driveUrl}" target="_blank" class="text-[10px] text-indigo-600 hover:underline flex items-center gap-0.5 mt-0.5">📄 View Receipt</a>` : "";
   let statusBadge = isPaid 
     ? `<span class="bg-indigo-100 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider">Paid</span>` 
     : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider">Unpaid</span>`;
@@ -566,18 +568,23 @@ async function handleFormSubmit(event, type) {
   if (!accessToken) { alert("To post directly to Google Sheets & Drive, you must sign in using 'Sign in with Google'."); return; }
 
   const btn = type === 'receipt' ? document.getElementById('btnReceipt') : document.getElementById('btnMileage');
-
   const userEmail = currentUser && currentUser.email ? currentUser.email : "Anonymous";
-  const date = new Date().toLocaleDateString();
 
   let rowData = [];
   let uploadedReceiptLink = editingRowIndex ? editingExistingDriveUrl : "";
-  
-  // Status defaults to "Unpaid" for new entries, or retains existing status if editing
   const entryStatus = editingRowIndex ? editingStatus : "Unpaid";
+
+  // Helper to format YYYY-MM-DD input to local MM/DD/YYYY string or fallback to today
+  const parseSelectedDate = (inputId) => {
+    const val = document.getElementById(inputId)?.value;
+    if (!val) return new Date().toLocaleDateString();
+    const [year, month, day] = val.split('-');
+    return new Date(year, month - 1, day).toLocaleDateString();
+  };
 
   try {
     if (type === 'receipt') {
+      const selectedDate = parseSelectedDate('receiptDate');
       const amount = parseFloat(document.getElementById('receiptAmount').value) || 0;
       const category = document.getElementById('receiptCategory').value;
       const notes = document.getElementById('receiptNotes').value.trim();
@@ -594,17 +601,19 @@ async function handleFormSubmit(event, type) {
       btn.innerText = editingRowIndex ? "Updating Sheet..." : "Writing to Sheet...";
       btn.disabled = true;
 
-      rowData = [date, userEmail, "Receipt", amount.toFixed(2), category, "", notes, uploadedReceiptLink, entryStatus];
+      rowData = [selectedDate, userEmail, "Receipt", amount.toFixed(2), category, "", notes, uploadedReceiptLink, entryStatus];
+
     } else {
+      const selectedDate = parseSelectedDate('mileageDate');
       btn.innerText = editingRowIndex ? "Updating Sheet..." : "Writing to Sheet...";
       btn.disabled = true;
 
-      const start = parseFloat(document.getElementById('startOdo').value);
-      const end = parseFloat(document.getElementById('endOdo').value);
+      const start = parseFloat(document.getElementById('startOdo').value) || 0;
+      const end = parseFloat(document.getElementById('endOdo').value) || 0;
       const miles = end - start;
       const notes = document.getElementById('mileageNotes').value;
       
-      rowData = [date, userEmail, "Mileage", "", "Mileage", miles, notes, "", entryStatus];
+      rowData = [selectedDate, userEmail, "Mileage", "", "Mileage", miles, notes, "", entryStatus];
     }
 
     let method = 'POST';
@@ -630,7 +639,6 @@ async function handleFormSubmit(event, type) {
     }
 
     alert(editingRowIndex ? "Entry updated successfully!" : `Logged a ${type} entry successfully!`);
-    
     document.getElementById('btnCancelEdit').click();
 
   } catch (error) {
@@ -641,9 +649,6 @@ async function handleFormSubmit(event, type) {
     btn.disabled = false;
   }
 }
-
-let existingCategories = [];
-
 // Fetch categories from the 3rd Tab ("Categories")
 async function fetchCategoriesFromSheet() {
   const sheetId = localStorage.getItem('user_sheet_id');
@@ -670,7 +675,7 @@ async function fetchCategoriesFromSheet() {
     } else {
       // Fallback defaults if Categories tab doesn't exist yet
       existingCategories = ["Office Supplies", "Meals & Entertainment", "Software & Subscriptions", "Travel & Lodging", "Marketing & Advertising"];
-        console.log("Fetched categories, Tab does not exist");
+      console.log("Fetched categories, Tab does not exist");
     }
     populateCategoryDropdown();
   } catch (err) {
@@ -681,12 +686,10 @@ async function fetchCategoriesFromSheet() {
 // Populate Category <select> dropdown in index.html
 function populateCategoryDropdown() {
   const categorySelect = document.getElementById('receiptCategory');
-  console.log("checking categoryselect");
   if (!categorySelect) return;
 
   // Preserve initial placeholder option
   categorySelect.innerHTML = `<option value="">Select Category...</option>`;
-  console.log("populated dropdown");
   existingCategories.forEach(cat => {
     const opt = document.createElement('option');
     opt.value = cat;
@@ -694,6 +697,11 @@ function populateCategoryDropdown() {
     categorySelect.appendChild(opt);
   });
 }
+
+// Initialize Voice Recognition
+document.addEventListener('DOMContentLoaded', () => {
+  initVoiceRecognition(() => existingCategories);
+});
 
 // ==========================================
 // SESSION TIMEOUT & COUNTDOWN MODAL CONFIG
